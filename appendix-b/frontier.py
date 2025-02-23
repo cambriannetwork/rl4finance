@@ -11,6 +11,27 @@ from datetime import datetime
 
 from common.data import get_latest_price_file, load_price_data, calculate_returns
 
+def calculate_total_return(returns, weights):
+    """Calculate total portfolio return over the full horizon for a buy-and-hold strategy.
+    
+    Args:
+        returns: DataFrame of asset returns (e.g., weekly returns)
+        weights: Array of portfolio weights
+    
+    Returns:
+        total_return: Expected total return over the full horizon
+    """
+    # Compute the mean return for each asset
+    expected_returns = returns.mean()
+    
+    # Compute portfolio return by taking the dot product with asset weights
+    portfolio_expected_return = weights @ expected_returns
+    
+    # Compute total return over the full period
+    total_return = (1 + portfolio_expected_return) ** len(returns) - 1
+    
+    return total_return
+
 def create_random_portfolios(returns, n_portfolios=5000, allow_short=False):
     """Generate random portfolio weights and calculate their metrics.
     
@@ -46,7 +67,10 @@ def create_random_portfolios(returns, n_portfolios=5000, allow_short=False):
     # Calculate Sharpe ratios (assuming 0 risk-free rate for simplicity)
     sharpe_ratios = portfolio_returns / portfolio_volatility
     
-    return weights, portfolio_returns, portfolio_volatility, sharpe_ratios
+    # Calculate total returns
+    total_returns = np.array([calculate_total_return(returns, w) for w in weights])
+    
+    return weights, portfolio_returns, portfolio_volatility, sharpe_ratios, total_returns
 
 def calculate_gmvp(returns, allow_short=False):
     """Calculate Global Minimum Variance Portfolio.
@@ -98,7 +122,10 @@ def calculate_gmvp(returns, allow_short=False):
         print("\n⚠️  GMVP uses significant shorting!")
         print(f"   Total leverage: {total_leverage:.2f}x")
     
-    return w_gmvp, return_gmvp, vol_gmvp, sharpe_gmvp
+    # Calculate total return
+    total_return_gmvp = calculate_total_return(returns, w_gmvp)
+    
+    return w_gmvp, return_gmvp, vol_gmvp, sharpe_gmvp, total_return_gmvp
 
 def plot_portfolios(returns, random_results, gmvp_results, save=False, period='daily'):
     """Create and optionally save portfolio visualization with hover information.
@@ -110,8 +137,8 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
         save: Whether to save plots to files
     """
     # Unpack results
-    rand_weights, rand_rets, rand_vols, rand_sharpe = random_results
-    gmvp_w, gmvp_ret, gmvp_vol, gmvp_sharpe = gmvp_results
+    rand_weights, rand_rets, rand_vols, rand_sharpe, rand_total = random_results
+    gmvp_w, gmvp_ret, gmvp_vol, gmvp_sharpe, gmvp_total = gmvp_results
     
     # Create main plot
     plt.figure(figsize=(10, 6))
@@ -181,20 +208,25 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
         if data_type == "random":
             idx = ind["ind"][0]
             weights_str = '\n'.join([f"{asset}: {w:6.2%}" for asset, w in zip(returns.columns, rand_weights[idx])])
-            text = (f"Return: {rand_rets_pct[idx]:6.1f}%\n"
+            text = (f"Period Return: {rand_rets_pct[idx]:6.1f}%\n"
+                   f"Total Return: {rand_total[idx]*100:6.1f}%\n"
                    f"Risk: {rand_vols_pct[idx]:6.1f}%\n"
                    f"Sharpe: {rand_sharpe[idx]:6.2f}\n"
                    f"\nWeights:\n{weights_str}")
         elif data_type == "asset":
             idx = ind["ind"][0]
             asset = returns.columns[idx]
+            # Calculate total return for individual asset
+            asset_total = calculate_total_return(returns, np.eye(len(returns.columns))[idx])
             text = (f"{asset}\n"
-                   f"Return: {asset_returns_pct.iloc[idx]:6.1f}%\n"
+                   f"Period Return: {asset_returns_pct.iloc[idx]:6.1f}%\n"
+                   f"Total Return: {asset_total*100:6.1f}%\n"
                    f"Risk: {asset_vols_pct.iloc[idx]:6.1f}%")
         else:  # GMVP
             weights_str = '\n'.join([f"{asset}: {w:6.2%}" for asset, w in zip(returns.columns, gmvp_w)])
             text = (f"Global Minimum Variance Portfolio\n"
-                   f"Return: {gmvp_ret_pct:6.1f}%\n"
+                   f"Period Return: {gmvp_ret_pct:6.1f}%\n"
+                   f"Total Return: {gmvp_total*100:6.1f}%\n"
                    f"Risk: {gmvp_vol_pct:6.1f}%\n"
                    f"Sharpe: {gmvp_sharpe:6.2f}\n"
                    f"\nWeights:\n{weights_str}")
