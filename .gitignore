@@ -13,3 +13,8 @@ venv/
 
 # IDE
 .vscode/
+
+# Python package build
+*.egg-info/
+build/
+dist/
