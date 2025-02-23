@@ -43,6 +43,9 @@ examples:
 
   # Get 5-minute data for the last day
   python get_prices.py --tokens ETH WBTC SOL --interval 5m --days 1
+
+  # Get weekly data
+  python get_prices.py --tokens ETH WBTC --period weekly
 """
 
 class CoinGeckoAPI:
@@ -175,6 +178,65 @@ def get_prices(
     result = pd.concat(all_data, ignore_index=True)
     return result.sort_values(['token', 'timestamp'])
 
+def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
+    """Resample price data to desired period.
+    
+    Args:
+        df: DataFrame with timestamp, token, price columns
+        period: 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'
+        
+    Returns:
+        DataFrame: Resampled price data
+    """
+    # Print data coverage before resampling
+    print("\nDate ranges per asset:")
+    for token in df['token'].unique():
+        token_data = df[df['token'] == token]
+        print(f"{token}: {token_data['timestamp'].min():%Y-%m-%d} to {token_data['timestamp'].max():%Y-%m-%d}")
+    
+    # Check data points per asset
+    counts = df.groupby('token').size()
+    if counts.nunique() > 1:
+        print("\nData points per asset:")
+        for token, count in counts.items():
+            print(f"{token}: {count} points")
+    
+    # Resample data
+    period_map = {
+        'daily': 'D',
+        'weekly': 'W',
+        'monthly': 'M',
+        'quarterly': 'Q',
+        'yearly': 'Y'
+    }
+    freq = period_map.get(period, 'D')
+    
+    # Pivot, resample, and melt back
+    pivot_df = df.pivot(index='timestamp', columns='token', values='price')
+    resampled = pivot_df.resample(freq).last()
+    
+    # Check for missing data after resampling
+    missing = resampled.isnull().sum()
+    if missing.any():
+        print("\nWarning: Missing data points after resampling:")
+        for token, count in missing.items():
+            if count > 0:
+                print(f"{token}: {count} missing points")
+    
+    # Fill any missing values
+    resampled = resampled.ffill()
+    
+    # Melt back to long format
+    result = resampled.reset_index().melt(
+        id_vars=['timestamp'],
+        var_name='token',
+        value_name='price'
+    )
+    
+    print(f"\nFinal number of periods: {len(resampled)}")
+    
+    return result.sort_values(['token', 'timestamp'])
+
 def save_data(df: pd.DataFrame) -> None:
     """Save data to CSV file."""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -197,12 +259,21 @@ def main():
                       help=f'Data interval (default: {DEFAULT_INTERVAL})')
     parser.add_argument('--currency', default=DEFAULT_CURRENCY,
                       help=f'Price currency (default: {DEFAULT_CURRENCY})')
+    parser.add_argument('--period',
+                      choices=['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
+                      default='daily',
+                      help='Resample period (default: daily)')
     
     args = parser.parse_args()
     
     try:
         symbols = [s.upper() for s in (args.tokens or DEFAULT_TOKENS)]
         df = get_prices(symbols, args.currency, args.days, args.interval)
+        
+        # Resample if needed
+        if args.period != 'daily':
+            print(f"\nResampling to {args.period} frequency...")
+            df = resample_prices(df, args.period)
         
         logger.info("\nLast 5 entries of price data:")
         print(df.tail())

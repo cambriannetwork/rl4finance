@@ -10,7 +10,7 @@ import os
 import numpy as np
 from datetime import datetime
 
-from common.data import get_latest_price_file, load_price_data
+from common.data import get_latest_price_file, load_price_data, calculate_returns
 
 def create_portfolio_weights(tokens):
     """Create random portfolio weights that sum to 1.
@@ -73,8 +73,7 @@ def main():
     print("\nAssets found:", ", ".join(prices.columns))
     
     # Calculate returns (using arithmetic returns)
-    # Fill any non-leading NA values before pct_change
-    returns = prices.ffill().pct_change().dropna()
+    returns = calculate_returns(prices, return_type='arithmetic')
     print(f"\nNumber of return periods: {len(returns)}")
     
     # Create portfolio weights

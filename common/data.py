@@ -4,7 +4,7 @@ Common data loading and processing functions.
 import os
 import glob
 import pandas as pd
-from datetime import datetime
+import numpy as np
 
 def get_latest_price_file(tools_dir):
     """Find the latest token_prices CSV file in the tools directory.
@@ -42,13 +42,6 @@ def load_price_data(file_path, check_consistency=True):
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
     if check_consistency:
-        # Check data points per asset before pivot
-        counts = df.groupby('token').size()
-        if counts.nunique() > 1:
-            print("\nWarning: Uneven data points across assets:")
-            for token, count in counts.items():
-                print(f"{token}: {count} points")
-        
         # Get date range for each asset
         date_ranges = df.groupby('token').agg({
             'timestamp': ['min', 'max']
@@ -73,17 +66,26 @@ def load_price_data(file_path, check_consistency=True):
     
     return pivot_df
 
-def save_data(df: pd.DataFrame, filename_prefix='token_prices') -> str:
-    """Save data to CSV file with timestamp.
+def calculate_returns(prices, return_type='arithmetic'):
+    """Calculate returns from price data.
     
     Args:
-        df (pd.DataFrame): Data to save
-        filename_prefix (str): Prefix for the output filename
+        prices (pd.DataFrame): Price data with datetime index and token columns
+        return_type (str): Type of return calculation ('arithmetic' or 'log')
         
     Returns:
-        str: Path to the saved file
+        pd.DataFrame: Returns data
     """
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f'{filename_prefix}_{timestamp}.csv'
-    df.to_csv(filename, index=False)
-    return filename
+    # Fill any missing values before calculating returns
+    prices = prices.ffill()
+    
+    # Calculate returns based on type
+    if return_type == 'arithmetic':
+        returns = prices.pct_change()
+    else:  # log returns
+        returns = np.log(prices / prices.shift(1))
+    
+    # Remove any rows with missing data
+    returns = returns.dropna()
+    
+    return returns

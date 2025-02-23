@@ -9,68 +9,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-from common.data import get_latest_price_file, load_price_data
-
-def calculate_returns(prices, return_type='arithmetic', period='daily'):
-    """Calculate returns from price data.
-    
-    Args:
-        prices (pd.DataFrame): Price data with datetime index
-        return_type (str): Type of return calculation ('arithmetic' or 'log')
-        period (str): Return period ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')
-    
-    Returns:
-        pd.DataFrame: Returns data
-    """
-    # Check minimum data points required for each period
-    min_points = {
-        'daily': 2,
-        'weekly': 8,
-        'monthly': 30,
-        'quarterly': 90,
-        'yearly': 365
-    }
-    required = min_points.get(period, 2)
-    
-    if len(prices) < required:
-        raise ValueError(
-            f"Insufficient data points. Need at least {required} for {period} analysis, "
-            f"but only have {len(prices)}"
-        )
-    
-    # First resample data based on period
-    period_map = {
-        'daily': 'D',
-        'weekly': 'W',
-        'monthly': 'M',
-        'quarterly': 'Q',
-        'yearly': 'Y'
-    }
-    
-    # Resample to desired period (using last price of the period)
-    if period != 'daily':
-        prices = prices.resample(period_map[period]).last()
-        
-        # Check if we still have enough data after resampling
-        if len(prices) < 2:
-            raise ValueError(
-                f"Insufficient data points after {period} resampling. "
-                f"Need at least 2 points, but only have {len(prices)}"
-            )
-    
-    # Calculate returns based on type
-    if return_type == 'arithmetic':
-        returns = prices.pct_change()
-    else:  # log returns
-        returns = np.log(prices / prices.shift(1))
-    
-    # Remove any rows with missing data
-    returns = returns.dropna()
-    
-    # Check final data points
-    print(f"\nFinal number of return periods: {len(returns)}")
-    
-    return returns
+from common.data import get_latest_price_file, load_price_data, calculate_returns
 
 def plot_matrices(returns, save_path='covariance_correlation_matrices.png'):
     """Create and save covariance and correlation matrix heatmaps."""
@@ -123,12 +62,6 @@ def parse_args():
         default='arithmetic',
         help='Type of return calculation (default: arithmetic)'
     )
-    parser.add_argument(
-        '--period',
-        choices=['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
-        default='daily',
-        help='Return calculation period (default: daily)'
-    )
     return parser.parse_args()
 
 def main():
@@ -151,12 +84,9 @@ def main():
         print("\nAssets found:", ", ".join(prices.columns))
         
         # Calculate returns
-        returns = calculate_returns(
-            prices,
-            return_type=args.return_type,
-            period=args.period
-        )
-        print(f"\nCalculating {args.return_type} returns on {args.period} basis")
+        returns = calculate_returns(prices, return_type=args.return_type)
+        print(f"\nCalculating {args.return_type} returns")
+        print(f"Number of return periods: {len(returns)}")
         
         # Plot matrices
         cov_matrix, corr_matrix = plot_matrices(returns)
