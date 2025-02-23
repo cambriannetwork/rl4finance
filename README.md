@@ -8,7 +8,8 @@ A Python project for portfolio optimization and cryptocurrency price data analys
 RL4Finance/
 ├── appendix-b/
 │   ├── main.py         # Portfolio optimization with efficient frontier
-│   └── main2.py        # Extended version with plot saving
+│   ├── main2.py        # Extended version with plot saving
+│   └── covariance.py   # Asset returns covariance/correlation analysis
 ├── tools/
 │   └── get_prices.py   # Crypto price data fetcher
 ├── setup.sh            # Setup script
@@ -34,6 +35,24 @@ Both scripts use synthetic data to demonstrate the concepts of:
 - Covariance matrix computation
 - Portfolio weight optimization
 - Risk-return trade-off visualization
+
+### Covariance Analysis (appendix-b/covariance.py)
+
+Analyzes relationships between asset returns:
+- Calculates and visualizes covariance and correlation matrices
+- Supports different return types:
+  - Arithmetic returns: (Pt - Pt-1)/Pt-1
+  - Log returns: ln(Pt/Pt-1)
+- Flexible time periods:
+  - Daily (default)
+  - Weekly
+  - Monthly
+  - Quarterly
+  - Yearly
+- Automatically uses latest price data from tools/
+- Generates side-by-side visualization of:
+  - Covariance matrix (raw co-movement)
+  - Correlation matrix (normalized -1 to 1 scale)
 
 ### Cryptocurrency Price Data (tools/)
 
@@ -83,6 +102,29 @@ The scripts will:
 2. Calculate efficient frontier
 3. Find the Global Minimum Variance Portfolio
 4. Display/save visualization plots
+
+### Covariance Analysis
+
+Basic usage (daily arithmetic returns):
+```bash
+python appendix-b/covariance.py
+```
+
+With options:
+```bash
+# Calculate log returns on weekly basis
+python appendix-b/covariance.py --return-type log --period weekly
+
+# Monthly arithmetic returns
+python appendix-b/covariance.py --period monthly
+```
+
+The script will:
+1. Find the latest price data file
+2. Calculate returns based on specified options
+3. Generate covariance and correlation matrices
+4. Create and save visualizations
+5. Display numerical results
 
 ### Price Data Collection
 
