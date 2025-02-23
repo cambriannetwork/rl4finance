@@ -7,9 +7,9 @@ A Python project for portfolio optimization and cryptocurrency price data analys
 ```
 RL4Finance/
 ├── appendix-b/
-│   ├── main.py         # Portfolio optimization with efficient frontier
-│   ├── main2.py        # Extended version with plot saving
-│   └── covariance.py   # Asset returns covariance/correlation analysis
+│   ├── frontier.py     # Portfolio optimization with efficient frontier
+│   ├── covariance.py   # Asset returns covariance/correlation analysis
+│   └── return_and_risk.py  # Return and risk analysis
 ├── tools/
 │   └── get_prices.py   # Crypto price data fetcher
 ├── common/             # Shared functionality
