@@ -56,8 +56,6 @@ def calculate_returns(prices, return_type='arithmetic', period='daily'):
     Returns:
         pd.DataFrame: Returns data
     """
-    # Fill any missing values before calculating returns
-    prices = prices.ffill()
     
     # Resample data based on period
     period_map = {

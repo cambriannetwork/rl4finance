@@ -214,20 +214,22 @@ def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
     }
     freq = period_map.get(period, 'D')
     
-    # Pivot, resample, and melt back
+    # Pivot and resample
     pivot_df = df.pivot(index='timestamp', columns='token', values='price')
+    original_periods = len(pivot_df)
+    logger.info(f"\nOriginal number of periods: {original_periods}")
+    
+    # Drop any rows with missing data
+    pivot_df = pivot_df.dropna()
+    dropped_periods = original_periods - len(pivot_df)
+    if dropped_periods > 0:
+        logger.warning(f"\nDropped {dropped_periods} periods due to missing data")
+    
+    # Resample the aligned data
     resampled = pivot_df.resample(freq).last()
     
-    # Check for missing data after resampling
-    missing = resampled.isnull().sum()
-    if missing.any():
-        logger.warning("\nMissing data points after alignment:")
-        for token, count in missing.items():
-            if count > 0:
-                logger.warning(f"{token}: {count} missing points")
-    
-    # Fill any missing values
-    resampled = resampled.ffill()
+    # Drop any new missing data after resampling
+    resampled = resampled.dropna()
     
     # Melt back to long format
     result = resampled.reset_index().melt(
@@ -236,7 +238,7 @@ def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
         value_name='price'
     )
     
-    logger.info(f"\nFinal number of periods: {len(resampled)}")
+    logger.info(f"\nFinal number of aligned periods: {len(resampled)}")
     
     return result.sort_values(['token', 'timestamp'])
 
@@ -289,16 +291,24 @@ def main():
                 for token, count in counts.items():
                     logger.info(f"{token}: {count} points")
             
-            # Check for missing data
+            # Drop any timestamps where we don't have all prices
             pivot_df = df.pivot(index='timestamp', columns='token', values='price')
-            missing = pivot_df.isnull().sum()
-            if missing.any():
-                logger.warning("\nMissing data points after alignment:")
-                for token, count in missing.items():
-                    if count > 0:
-                        logger.warning(f"{token}: {count} missing points")
+            original_periods = len(pivot_df)
+            logger.info(f"\nOriginal number of periods: {original_periods}")
             
-            logger.info(f"\nFinal number of periods: {len(pivot_df)}")
+            pivot_df = pivot_df.dropna()
+            dropped_periods = original_periods - len(pivot_df)
+            if dropped_periods > 0:
+                logger.warning(f"\nDropped {dropped_periods} periods due to missing data")
+            
+            # Convert back to long format
+            df = pivot_df.reset_index().melt(
+                id_vars=['timestamp'],
+                var_name='token',
+                value_name='price'
+            )
+            
+            logger.info(f"\nFinal number of aligned periods: {len(pivot_df)}")
         else:
             # Resample and show data quality info
             print(f"\nResampling to {args.period} frequency...")
