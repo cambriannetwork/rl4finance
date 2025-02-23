@@ -18,6 +18,7 @@ def create_random_portfolios(returns, n_portfolios=5000, allow_short=False):
         returns: DataFrame of asset returns
         n_portfolios: Number of random portfolios to generate
         allow_short: Whether to allow short selling
+        max_leverage: Maximum allowed leverage (sum of absolute weights)
         
     Returns:
         tuple: (weights, returns, volatilities, sharpe_ratios)
@@ -35,9 +36,12 @@ def create_random_portfolios(returns, n_portfolios=5000, allow_short=False):
     # Calculate portfolio metrics
     portfolio_returns = weights @ returns.mean()
     
-    # Calculate portfolio volatilities using matrix multiplication
+    # Calculate portfolio volatilities using correlation-adjusted covariance
     cov_matrix = returns.cov()
-    portfolio_volatility = np.sqrt(np.einsum('ij,jk,ik->i', weights, cov_matrix, weights))
+    std_devs = np.sqrt(np.diag(cov_matrix))
+    correlation_matrix = cov_matrix / np.outer(std_devs, std_devs)
+    scaled_cov_matrix = correlation_matrix * np.outer(std_devs, std_devs)
+    portfolio_volatility = np.sqrt(np.einsum('ij,jk,ik->i', weights, scaled_cov_matrix, weights))
     
     # Calculate Sharpe ratios (assuming 0 risk-free rate for simplicity)
     sharpe_ratios = portfolio_returns / portfolio_volatility
@@ -50,6 +54,7 @@ def calculate_gmvp(returns, allow_short=False):
     Args:
         returns: DataFrame of asset returns
         allow_short: Whether to allow short selling
+        max_leverage: Maximum allowed leverage when shorting
         
     Returns:
         tuple: (weights, return, volatility, sharpe_ratio)
@@ -57,31 +62,41 @@ def calculate_gmvp(returns, allow_short=False):
     n_assets = len(returns.columns)
     cov_matrix = returns.cov()
     
+    # Use correlation-adjusted covariance matrix
+    std_devs = np.sqrt(np.diag(cov_matrix))
+    correlation_matrix = cov_matrix / np.outer(std_devs, std_devs)
+    scaled_cov_matrix = correlation_matrix * np.outer(std_devs, std_devs)
+    
+    # Define optimization constraints
+    constraints = [
+        {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}  # Weights sum to 1
+    ]
+    
     if allow_short:
-        # Analytical solution when short selling is allowed
-        inverse_cov = np.linalg.inv(cov_matrix)
-        ones = np.ones(n_assets)
-        w_gmvp = inverse_cov @ ones / (ones.T @ inverse_cov @ ones)
+        bounds = tuple((-1, 1) for _ in range(n_assets))
     else:
-        # Numerical solution with no-short-selling constraint
-        constraints = (
-            {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}  # Weights sum to 1
-        )
         bounds = tuple((0, 1) for _ in range(n_assets))
-        
-        result = sco.minimize(
-            lambda w: w.T @ cov_matrix @ w,  # Minimize portfolio variance
-            n_assets * [1. / n_assets],  # Start with equal weights
-            method='SLSQP',
-            bounds=bounds,
-            constraints=constraints
-        )
-        w_gmvp = result.x
+    
+    # Find GMVP using numerical optimization
+    result = sco.minimize(
+        lambda w: w.T @ scaled_cov_matrix @ w,  # Minimize portfolio variance
+        n_assets * [1. / n_assets],  # Start with equal weights
+        method='SLSQP',
+        bounds=bounds,
+        constraints=constraints
+    )
+    w_gmvp = result.x
     
     # Calculate GMVP metrics
     return_gmvp = w_gmvp @ returns.mean()
-    vol_gmvp = np.sqrt(w_gmvp.T @ cov_matrix @ w_gmvp)
+    vol_gmvp = np.sqrt(w_gmvp.T @ scaled_cov_matrix @ w_gmvp)
     sharpe_gmvp = return_gmvp / vol_gmvp
+    
+    # Print warning if significant shorting is used
+    total_leverage = np.sum(np.abs(w_gmvp))
+    if total_leverage > 1.2:  # Arbitrary threshold
+        print("\n⚠️  GMVP uses significant shorting!")
+        print(f"   Total leverage: {total_leverage:.2f}x")
     
     return w_gmvp, return_gmvp, vol_gmvp, sharpe_gmvp
 
@@ -128,12 +143,13 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
                s=100,
                label='Individual Assets')
     
-    # Plot GMVP
+    # Plot GMVP with color based on shorting
+    gmvp_color = 'red' if np.any(gmvp_w < -0.01) else 'blue'  # Small threshold to account for numerical errors
     plt.scatter([gmvp_vol_pct], [gmvp_ret_pct],
-               color='red',
+               color=gmvp_color,
                marker='*',
                s=200,
-               label='Global Minimum Variance Portfolio')
+               label='Global Minimum Variance Portfolio' + (' (with shorts)' if gmvp_color == 'red' else ''))
     
     # Set axis limits based on data
     x_min = min(min(rand_vols_pct), min(asset_vols_pct))
@@ -251,6 +267,7 @@ def main():
     try:
         # Parse arguments
         args = parse_args()
+        
         
         # Print start time
         print(f"\nAnalysis started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
