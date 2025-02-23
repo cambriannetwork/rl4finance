@@ -163,8 +163,8 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
             idx = ind["ind"][0]
             asset = returns.columns[idx]
             text = (f"{asset}\n"
-                   f"Return: {asset_returns[idx]:6.2%}\n"
-                   f"Risk: {asset_vols[idx]:6.2%}")
+                   f"Return: {asset_returns.iloc[idx]:6.2%}\n"
+                   f"Risk: {asset_vols.iloc[idx]:6.2%}")
         else:  # GMVP
             weights_str = '\n'.join([f"{asset}: {w:6.2%}" for asset, w in zip(returns.columns, gmvp_w)])
             text = (f"Global Minimum Variance Portfolio\n"
