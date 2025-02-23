@@ -66,18 +66,34 @@ def load_price_data(file_path, check_consistency=True):
     
     return pivot_df
 
-def calculate_returns(prices, return_type='arithmetic'):
+def calculate_returns(prices, return_type='arithmetic', period='daily'):
     """Calculate returns from price data.
     
     Args:
         prices (pd.DataFrame): Price data with datetime index and token columns
         return_type (str): Type of return calculation ('arithmetic' or 'log')
+        period (str): Return calculation period ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')
         
     Returns:
         pd.DataFrame: Returns data
     """
     # Fill any missing values before calculating returns
     prices = prices.ffill()
+    
+    # Resample data based on period
+    period_map = {
+        'daily': 'D',
+        'weekly': 'W',
+        'monthly': 'ME',  # Month End frequency
+        'quarterly': 'QE',  # Quarter End frequency
+        'yearly': 'YE'  # Year End frequency
+    }
+    
+    # Get the pandas frequency string for the period
+    freq = period_map[period]
+    
+    # Resample to the specified period, taking the last price of each period
+    prices = prices.resample(freq).last()
     
     # Calculate returns based on type
     if return_type == 'arithmetic':

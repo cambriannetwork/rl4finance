@@ -119,6 +119,11 @@ python appendix-b/covariance.py --return-type log --period weekly
 
 # Monthly arithmetic returns
 python appendix-b/covariance.py --period monthly
+
+# Other period options
+python appendix-b/covariance.py --period daily    # Default
+python appendix-b/covariance.py --period quarterly
+python appendix-b/covariance.py --period yearly
 ```
 
 The script will:

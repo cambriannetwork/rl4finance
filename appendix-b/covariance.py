@@ -62,6 +62,12 @@ def parse_args():
         default='arithmetic',
         help='Type of return calculation (default: arithmetic)'
     )
+    parser.add_argument(
+        '--period',
+        choices=['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
+        default='daily',
+        help='Return calculation period (default: daily)'
+    )
     return parser.parse_args()
 
 def main():
@@ -84,8 +90,8 @@ def main():
         print("\nAssets found:", ", ".join(prices.columns))
         
         # Calculate returns
-        returns = calculate_returns(prices, return_type=args.return_type)
-        print(f"\nCalculating {args.return_type} returns")
+        returns = calculate_returns(prices, return_type=args.return_type, period=args.period)
+        print(f"\nCalculating {args.return_type} returns on {args.period} basis")
         print(f"Number of return periods: {len(returns)}")
         
         # Plot matrices
