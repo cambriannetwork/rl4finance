@@ -26,12 +26,11 @@ def get_latest_price_file(tools_dir):
     
     return sorted(files, key=os.path.getctime, reverse=True)[0]  # Sort by file creation time
 
-def load_price_data(file_path, check_consistency=True):
+def load_price_data(file_path):
     """Load and preprocess price data from CSV.
     
     Args:
         file_path (str): Path to the price data CSV file
-        check_consistency (bool): Whether to perform data consistency checks
         
     Returns:
         pd.DataFrame: Price data with datetime index and token columns
@@ -41,28 +40,8 @@ def load_price_data(file_path, check_consistency=True):
     # Convert timestamp to datetime
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
-    if check_consistency:
-        # Get date range for each asset
-        date_ranges = df.groupby('token').agg({
-            'timestamp': ['min', 'max']
-        })
-        print("\nDate ranges per asset:")
-        for token in date_ranges.index:
-            start = date_ranges.loc[token, ('timestamp', 'min')].strftime('%Y-%m-%d')
-            end = date_ranges.loc[token, ('timestamp', 'max')].strftime('%Y-%m-%d')
-            print(f"{token}: {start} to {end}")
-    
     # Pivot the data to get prices for each token in columns
     pivot_df = df.pivot(index='timestamp', columns='token', values='price')
-    
-    if check_consistency:
-        # Check for missing data after pivot
-        missing = pivot_df.isnull().sum()
-        if missing.any():
-            print("\nWarning: Missing data points after alignment:")
-            for token, count in missing.items():
-                if count > 0:
-                    print(f"{token}: {count} missing points")
     
     return pivot_df
 

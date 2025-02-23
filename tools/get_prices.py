@@ -188,26 +188,29 @@ def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
     Returns:
         DataFrame: Resampled price data
     """
-    # Print data coverage before resampling
-    print("\nDate ranges per asset:")
+    # Print data coverage and quality info
+    logger.info("\nData Quality Report:")
+    
+    # Print date ranges per asset
+    logger.info("\nDate ranges per asset:")
     for token in df['token'].unique():
         token_data = df[df['token'] == token]
-        print(f"{token}: {token_data['timestamp'].min():%Y-%m-%d} to {token_data['timestamp'].max():%Y-%m-%d}")
+        logger.info(f"{token}: {token_data['timestamp'].min():%Y-%m-%d} to {token_data['timestamp'].max():%Y-%m-%d}")
     
     # Check data points per asset
     counts = df.groupby('token').size()
     if counts.nunique() > 1:
-        print("\nData points per asset:")
+        logger.info("\nData points per asset:")
         for token, count in counts.items():
-            print(f"{token}: {count} points")
+            logger.info(f"{token}: {count} points")
     
     # Resample data
     period_map = {
         'daily': 'D',
         'weekly': 'W',
-        'monthly': 'M',
-        'quarterly': 'Q',
-        'yearly': 'Y'
+        'monthly': 'ME',  # Month End frequency
+        'quarterly': 'QE',  # Quarter End frequency
+        'yearly': 'YE'  # Year End frequency
     }
     freq = period_map.get(period, 'D')
     
@@ -218,10 +221,10 @@ def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
     # Check for missing data after resampling
     missing = resampled.isnull().sum()
     if missing.any():
-        print("\nWarning: Missing data points after resampling:")
+        logger.warning("\nMissing data points after alignment:")
         for token, count in missing.items():
             if count > 0:
-                print(f"{token}: {count} missing points")
+                logger.warning(f"{token}: {count} missing points")
     
     # Fill any missing values
     resampled = resampled.ffill()
@@ -233,7 +236,7 @@ def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
         value_name='price'
     )
     
-    print(f"\nFinal number of periods: {len(resampled)}")
+    logger.info(f"\nFinal number of periods: {len(resampled)}")
     
     return result.sort_values(['token', 'timestamp'])
 
@@ -270,8 +273,34 @@ def main():
         symbols = [s.upper() for s in (args.tokens or DEFAULT_TOKENS)]
         df = get_prices(symbols, args.currency, args.days, args.interval)
         
-        # Resample if needed
-        if args.period != 'daily':
+        # Always show data quality info and resample if needed
+        if args.period == 'daily':
+            # Just show data quality info without resampling
+            logger.info("\nData Quality Report:")
+            logger.info("\nDate ranges per asset:")
+            for token in df['token'].unique():
+                token_data = df[df['token'] == token]
+                logger.info(f"{token}: {token_data['timestamp'].min():%Y-%m-%d} to {token_data['timestamp'].max():%Y-%m-%d}")
+            
+            # Check data points per asset
+            counts = df.groupby('token').size()
+            if counts.nunique() > 1:
+                logger.info("\nData points per asset:")
+                for token, count in counts.items():
+                    logger.info(f"{token}: {count} points")
+            
+            # Check for missing data
+            pivot_df = df.pivot(index='timestamp', columns='token', values='price')
+            missing = pivot_df.isnull().sum()
+            if missing.any():
+                logger.warning("\nMissing data points after alignment:")
+                for token, count in missing.items():
+                    if count > 0:
+                        logger.warning(f"{token}: {count} missing points")
+            
+            logger.info(f"\nFinal number of periods: {len(pivot_df)}")
+        else:
+            # Resample and show data quality info
             print(f"\nResampling to {args.period} frequency...")
             df = resample_prices(df, args.period)
         
