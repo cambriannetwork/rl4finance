@@ -101,8 +101,20 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
     # Create main plot
     plt.figure(figsize=(10, 6))
     
+    # Get asset returns and volatilities
+    asset_returns = returns.mean()
+    asset_vols = returns.std()
+    
+    # Convert returns and volatilities to percentages
+    rand_rets_pct = rand_rets * 100
+    rand_vols_pct = rand_vols * 100
+    asset_returns_pct = asset_returns * 100
+    asset_vols_pct = asset_vols * 100
+    gmvp_ret_pct = gmvp_ret * 100
+    gmvp_vol_pct = gmvp_vol * 100
+    
     # Plot random portfolios
-    scatter = plt.scatter(rand_vols, rand_rets,
+    scatter = plt.scatter(rand_vols_pct, rand_rets_pct,
                          c=rand_sharpe,
                          cmap='viridis',
                          marker='o',
@@ -110,35 +122,33 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
                          label='Random Portfolios')
     
     # Plot individual assets
-    asset_returns = returns.mean()
-    asset_vols = returns.std()
-    plt.scatter(asset_vols, asset_returns,
+    plt.scatter(asset_vols_pct, asset_returns_pct,
                color='black',
                marker='D',
                s=100,
                label='Individual Assets')
     
     # Plot GMVP
-    plt.scatter([gmvp_vol], [gmvp_ret],
+    plt.scatter([gmvp_vol_pct], [gmvp_ret_pct],
                color='red',
                marker='*',
                s=200,
                label='Global Minimum Variance Portfolio')
     
     # Set axis limits based on data
-    x_min = min(min(rand_vols), min(asset_vols))
-    x_max = max(max(rand_vols), max(asset_vols))
-    y_min = min(min(rand_rets), min(asset_returns))
-    y_max = max(max(rand_rets), max(asset_returns))
+    x_min = min(min(rand_vols_pct), min(asset_vols_pct))
+    x_max = max(max(rand_vols_pct), max(asset_vols_pct))
+    y_min = min(min(rand_rets_pct), min(asset_returns_pct))
+    y_max = max(max(rand_rets_pct), max(asset_returns_pct))
     plt.xlim(x_min * 0.9, x_max * 1.1)
     plt.ylim(y_min * 0.9, y_max * 1.1)
     
     # Customize plot
-    plt.xlabel('Risk (Standard Deviation)')
-    plt.ylabel('Expected Return')
+    plt.xlabel('Risk (Standard Deviation) %')
+    plt.ylabel('Expected Return %')
     plt.colorbar(scatter, label='Sharpe Ratio')
     plt.title('Portfolio Analysis')
-    plt.legend()
+    plt.legend(loc='lower left')
     plt.grid()
     
     # Add hover annotations using matplotlib's event handling
@@ -155,21 +165,21 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
         if data_type == "random":
             idx = ind["ind"][0]
             weights_str = '\n'.join([f"{asset}: {w:6.2%}" for asset, w in zip(returns.columns, rand_weights[idx])])
-            text = (f"Return: {rand_rets[idx]:6.2%}\n"
-                   f"Risk: {rand_vols[idx]:6.2%}\n"
+            text = (f"Return: {rand_rets_pct[idx]:6.1f}%\n"
+                   f"Risk: {rand_vols_pct[idx]:6.1f}%\n"
                    f"Sharpe: {rand_sharpe[idx]:6.2f}\n"
                    f"\nWeights:\n{weights_str}")
         elif data_type == "asset":
             idx = ind["ind"][0]
             asset = returns.columns[idx]
             text = (f"{asset}\n"
-                   f"Return: {asset_returns.iloc[idx]:6.2%}\n"
-                   f"Risk: {asset_vols.iloc[idx]:6.2%}")
+                   f"Return: {asset_returns_pct.iloc[idx]:6.1f}%\n"
+                   f"Risk: {asset_vols_pct.iloc[idx]:6.1f}%")
         else:  # GMVP
             weights_str = '\n'.join([f"{asset}: {w:6.2%}" for asset, w in zip(returns.columns, gmvp_w)])
             text = (f"Global Minimum Variance Portfolio\n"
-                   f"Return: {gmvp_ret:6.2%}\n"
-                   f"Risk: {gmvp_vol:6.2%}\n"
+                   f"Return: {gmvp_ret_pct:6.1f}%\n"
+                   f"Risk: {gmvp_vol_pct:6.1f}%\n"
                    f"Sharpe: {gmvp_sharpe:6.2f}\n"
                    f"\nWeights:\n{weights_str}")
         
