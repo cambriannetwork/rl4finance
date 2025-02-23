@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# System files
+.DS_Store
+
+# Generated files
+*.csv
+*.png
+
+# IDE
+.vscode/
