@@ -2,7 +2,7 @@
 Calculate and visualize covariance and correlation between cryptocurrency prices.
 """
 import os
-import glob
+import sys
 import argparse
 import numpy as np
 import pandas as pd
@@ -10,29 +10,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-def get_latest_price_file():
-    """Find the latest token_prices CSV file in the tools directory."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    tools_dir = os.path.join(script_dir, '..', 'tools')
-    pattern = os.path.join(tools_dir, 'token_prices_*.csv')
+# Add project root to Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-    files = glob.glob(pattern)
-    if not files:
-        raise FileNotFoundError("No token_prices CSV files found in tools directory")
-    
-    return sorted(files, key=os.path.getctime, reverse=True)[0]  # Sort by file creation time
-
-def load_price_data(file_path):
-    """Load and preprocess price data from CSV."""
-    df = pd.read_csv(file_path)
-    
-    # Convert timestamp to datetime
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    
-    # Pivot the data to get prices for each token in columns
-    pivot_df = df.pivot(index='timestamp', columns='token', values='price')
-    
-    return pivot_df
+from common.data import get_latest_price_file, load_price_data
 
 def calculate_returns(prices, return_type='arithmetic', period='daily'):
     """Calculate returns from price data.
@@ -45,6 +28,22 @@ def calculate_returns(prices, return_type='arithmetic', period='daily'):
     Returns:
         pd.DataFrame: Returns data
     """
+    # Check minimum data points required for each period
+    min_points = {
+        'daily': 2,
+        'weekly': 8,
+        'monthly': 30,
+        'quarterly': 90,
+        'yearly': 365
+    }
+    required = min_points.get(period, 2)
+    
+    if len(prices) < required:
+        raise ValueError(
+            f"Insufficient data points. Need at least {required} for {period} analysis, "
+            f"but only have {len(prices)}"
+        )
+    
     # First resample data based on period
     period_map = {
         'daily': 'D',
@@ -57,6 +56,13 @@ def calculate_returns(prices, return_type='arithmetic', period='daily'):
     # Resample to desired period (using last price of the period)
     if period != 'daily':
         prices = prices.resample(period_map[period]).last()
+        
+        # Check if we still have enough data after resampling
+        if len(prices) < 2:
+            raise ValueError(
+                f"Insufficient data points after {period} resampling. "
+                f"Need at least 2 points, but only have {len(prices)}"
+            )
     
     # Calculate returns based on type
     if return_type == 'arithmetic':
@@ -64,7 +70,13 @@ def calculate_returns(prices, return_type='arithmetic', period='daily'):
     else:  # log returns
         returns = np.log(prices / prices.shift(1))
     
-    return returns.dropna()
+    # Remove any rows with missing data
+    returns = returns.dropna()
+    
+    # Check final data points
+    print(f"\nFinal number of return periods: {len(returns)}")
+    
+    return returns
 
 def plot_matrices(returns, save_path='covariance_correlation_matrices.png'):
     """Create and save covariance and correlation matrix heatmaps."""
@@ -134,7 +146,9 @@ def main():
         args = parse_args()
         
         # Get latest price data
-        price_file = get_latest_price_file()
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        tools_dir = os.path.join(script_dir, '..', 'tools')
+        price_file = get_latest_price_file(tools_dir)
         print(f"\nProcessing file: {os.path.abspath(price_file)}")
         print(f"File created: {datetime.fromtimestamp(os.path.getctime(price_file)).strftime('%Y-%m-%d %H:%M:%S')}")
         

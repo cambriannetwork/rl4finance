@@ -1,0 +1,89 @@
+"""
+Common data loading and processing functions.
+"""
+import os
+import glob
+import pandas as pd
+from datetime import datetime
+
+def get_latest_price_file(tools_dir):
+    """Find the latest token_prices CSV file in the tools directory.
+    
+    Args:
+        tools_dir (str): Path to the tools directory
+        
+    Returns:
+        str: Path to the latest price file
+        
+    Raises:
+        FileNotFoundError: If no price files found
+    """
+    pattern = os.path.join(tools_dir, 'token_prices_*.csv')
+
+    files = glob.glob(pattern)
+    if not files:
+        raise FileNotFoundError("No token_prices CSV files found in tools directory")
+    
+    return sorted(files, key=os.path.getctime, reverse=True)[0]  # Sort by file creation time
+
+def load_price_data(file_path, check_consistency=True):
+    """Load and preprocess price data from CSV.
+    
+    Args:
+        file_path (str): Path to the price data CSV file
+        check_consistency (bool): Whether to perform data consistency checks
+        
+    Returns:
+        pd.DataFrame: Price data with datetime index and token columns
+    """
+    df = pd.read_csv(file_path)
+    
+    # Convert timestamp to datetime
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    if check_consistency:
+        # Check data points per asset before pivot
+        counts = df.groupby('token').size()
+        if counts.nunique() > 1:
+            print("\nWarning: Uneven data points across assets:")
+            for token, count in counts.items():
+                print(f"{token}: {count} points")
+        
+        # Get date range for each asset
+        date_ranges = df.groupby('token').agg({
+            'timestamp': ['min', 'max']
+        })
+        print("\nDate ranges per asset:")
+        for token in date_ranges.index:
+            start = date_ranges.loc[token, ('timestamp', 'min')].strftime('%Y-%m-%d')
+            end = date_ranges.loc[token, ('timestamp', 'max')].strftime('%Y-%m-%d')
+            print(f"{token}: {start} to {end}")
+    
+    # Pivot the data to get prices for each token in columns
+    pivot_df = df.pivot(index='timestamp', columns='token', values='price')
+    
+    if check_consistency:
+        # Check for missing data after pivot
+        missing = pivot_df.isnull().sum()
+        if missing.any():
+            print("\nWarning: Missing data points after alignment:")
+            for token, count in missing.items():
+                if count > 0:
+                    print(f"{token}: {count} missing points")
+    
+    return pivot_df
+
+def save_data(df: pd.DataFrame, filename_prefix='token_prices') -> str:
+    """Save data to CSV file with timestamp.
+    
+    Args:
+        df (pd.DataFrame): Data to save
+        filename_prefix (str): Prefix for the output filename
+        
+    Returns:
+        str: Path to the saved file
+    """
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'{filename_prefix}_{timestamp}.csv'
+    df.to_csv(filename, index=False)
+    return filename
