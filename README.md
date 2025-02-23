@@ -61,6 +61,12 @@ Analyzes relationships between asset returns:
 The `get_prices.py` script fetches historical cryptocurrency price data using the CoinGecko Pro API:
 - Default tokens: ETH and BTC
 - Customizable time intervals (5m, hourly, daily)
+- Flexible resampling periods (daily, weekly, monthly, quarterly, yearly)
+- Data quality reporting:
+  - Date ranges per asset
+  - Data points per asset
+  - Missing data points after alignment
+  - Final number of periods
 - CSV output with timestamp, token, and price columns
 
 ## Setup
@@ -91,6 +97,33 @@ The `get_prices.py` script fetches historical cryptocurrency price data using th
 ## Usage
 
 ### Portfolio Optimization
+
+#### Return and Risk Analysis
+Basic usage (daily arithmetic returns):
+```bash
+python appendix-b/return_and_risk.py
+```
+
+With options:
+```bash
+# Calculate log returns on weekly basis
+python appendix-b/return_and_risk.py --return-type log --period weekly
+
+# Monthly arithmetic returns
+python appendix-b/return_and_risk.py --period monthly
+
+# Other period options
+python appendix-b/return_and_risk.py --period daily    # Default
+python appendix-b/return_and_risk.py --period quarterly
+python appendix-b/return_and_risk.py --period yearly
+```
+
+The script calculates:
+1. Portfolio composition (random weights)
+2. Period-specific metrics (return, risk, Sharpe ratio)
+3. Annualized metrics for comparison
+
+#### Efficient Frontier
 
 Run either script to see portfolio optimization in action:
 ```bash
