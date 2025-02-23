@@ -22,21 +22,26 @@ RL4Finance/
 
 ### Portfolio Optimization (appendix-b/)
 
-The `main.py` and `main2.py` scripts demonstrate portfolio optimization techniques:
-- Efficient Frontier calculation
+The `frontier.py` script demonstrates portfolio optimization techniques:
+- Efficient Frontier calculation with interactive visualization
 - Global Minimum Variance Portfolio (GMVP)
-- Random portfolio generation
-- Risk-return visualization
+- Random portfolio generation with configurable size
+- Risk-return visualization with hover information
+- Support for short selling
+- Flexible return period calculation (daily, weekly, monthly, quarterly, yearly)
 
-Key differences between the scripts:
-- `main.py`: Displays plots interactively
-- `main2.py`: Saves plots to files (efficient_frontier.png and gmvp_plot.png)
-
-Both scripts use synthetic data to demonstrate the concepts of:
-- Mean returns calculation
-- Covariance matrix computation
-- Portfolio weight optimization
-- Risk-return trade-off visualization
+Features:
+- Interactive plot with hover details showing:
+  - Portfolio weights
+  - Expected return
+  - Risk (standard deviation)
+  - Sharpe ratio
+- Configurable options:
+  - Return type (arithmetic/log)
+  - Time period (daily/weekly/monthly/quarterly/yearly)
+  - Number of random portfolios
+  - Short selling allowance
+  - Plot saving
 
 ### Covariance Analysis (appendix-b/covariance.py)
 
@@ -125,18 +130,29 @@ The script calculates:
 
 #### Efficient Frontier
 
-Run either script to see portfolio optimization in action:
+Run the script to see portfolio optimization in action:
 ```bash
-python appendix-b/main.py
-# or
-python appendix-b/main2.py
+# Basic usage (daily arithmetic returns)
+python appendix-b/frontier.py
+
+# Monthly returns with 1000 portfolios and short selling
+python appendix-b/frontier.py --period monthly --portfolios 1000 --short
+
+# Save plots instead of displaying
+python appendix-b/frontier.py --save-plots
+
+# Other options
+python appendix-b/frontier.py --return-type log  # Use log returns
+python appendix-b/frontier.py --period weekly    # Weekly returns
+python appendix-b/frontier.py --portfolios 5000  # More random portfolios
 ```
 
-The scripts will:
-1. Generate synthetic asset data
-2. Calculate efficient frontier
-3. Find the Global Minimum Variance Portfolio
-4. Display/save visualization plots
+The script will:
+1. Load the latest price data
+2. Calculate returns based on specified options
+3. Generate random portfolios
+4. Find the Global Minimum Variance Portfolio
+5. Create interactive visualization with hover information
 
 ### Covariance Analysis
 
