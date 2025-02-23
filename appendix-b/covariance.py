@@ -2,18 +2,12 @@
 Calculate and visualize covariance and correlation between cryptocurrency prices.
 """
 import os
-import sys
 import argparse
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
-
-# Add project root to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
 from common.data import get_latest_price_file, load_price_data
 

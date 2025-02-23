@@ -12,7 +12,9 @@ RL4Finance/
 │   └── covariance.py   # Asset returns covariance/correlation analysis
 ├── tools/
 │   └── get_prices.py   # Crypto price data fetcher
-├── setup.sh            # Setup script
+├── common/             # Shared functionality
+│   └── data.py         # Data loading and processing functions
+├── setup.py            # Package installation configuration
 └── requirements.txt    # Project dependencies
 ```
 
@@ -74,9 +76,9 @@ The `get_prices.py` script fetches historical cryptocurrency price data using th
    ./setup.sh
    ```
 
-3. Install dependencies:
+3. Install package in editable mode with dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 
 4. Configure CoinGecko API:
