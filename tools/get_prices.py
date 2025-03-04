@@ -243,11 +243,22 @@ def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
     return result.sort_values(['token', 'timestamp'])
 
 def save_data(df: pd.DataFrame) -> None:
-    """Save data to CSV file."""
+    """Save data to CSV file in the data directory."""
+    # Get project root directory (parent of tools directory)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(project_root, 'data')
+    
+    # Create data directory if it doesn't exist
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Create filename with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f'token_prices_{timestamp}.csv'
-    df.to_csv(filename, index=False)
-    logger.info(f"Data saved to {filename}")
+    filepath = os.path.join(data_dir, filename)
+    
+    # Save the data
+    df.to_csv(filepath, index=False)
+    logger.info(f"Data saved to {filepath}")
 
 def main():
     parser = argparse.ArgumentParser(

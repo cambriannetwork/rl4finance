@@ -326,9 +326,7 @@ def main():
         print(f"\nAnalysis started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Get latest price data
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        tools_dir = os.path.join(script_dir, '..', 'tools')
-        price_file = get_latest_price_file(tools_dir)
+        price_file = get_latest_price_file()
         print(f"\nProcessing file: {os.path.abspath(price_file)}")
         print(f"File created: {datetime.fromtimestamp(os.path.getctime(price_file)).strftime('%Y-%m-%d %H:%M:%S')}")
         

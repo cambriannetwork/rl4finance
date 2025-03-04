@@ -6,11 +6,12 @@ import glob
 import pandas as pd
 import numpy as np
 
-def get_latest_price_file(tools_dir):
-    """Find the latest token_prices CSV file in the tools directory.
+def get_latest_price_file(project_root=None):
+    """Find the latest token_prices CSV file in the data directory.
     
     Args:
-        tools_dir (str): Path to the tools directory
+        project_root (str, optional): Path to project root directory. 
+                                    If None, will be inferred from current file location.
         
     Returns:
         str: Path to the latest price file
@@ -18,11 +19,16 @@ def get_latest_price_file(tools_dir):
     Raises:
         FileNotFoundError: If no price files found
     """
-    pattern = os.path.join(tools_dir, 'token_prices_*.csv')
+    if project_root is None:
+        # Get project root directory (parent of common directory)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    data_dir = os.path.join(project_root, 'data')
+    pattern = os.path.join(data_dir, 'token_prices_*.csv')
 
     files = glob.glob(pattern)
     if not files:
-        raise FileNotFoundError("No token_prices CSV files found in tools directory")
+        raise FileNotFoundError("No token_prices CSV files found in data directory")
     
     return sorted(files, key=os.path.getctime, reverse=True)[0]  # Sort by file creation time
 

@@ -10,6 +10,7 @@ venv/
 # Generated files
 *.csv
 *.png
+data/
 
 # IDE
 .vscode/

@@ -8,10 +8,10 @@ fi
 # Activate virtual environment
 source venv/bin/activate
 
-# Install required packages
-pip install numpy pandas matplotlib seaborn python-dotenv requests
+# Install package in editable mode with dependencies
+pip install -e .
 
-# Create requirements.txt
-pip freeze > requirements.txt
+# Create data directory
+mkdir -p data
 
 echo "Setup complete! You can now run 'source venv/bin/activate' to activate the environment."
