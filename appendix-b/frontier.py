@@ -57,12 +57,9 @@ def create_random_portfolios(returns, n_portfolios=5000, allow_short=False):
     # Calculate portfolio metrics
     portfolio_returns = weights @ returns.mean()
     
-    # Calculate portfolio volatilities using correlation-adjusted covariance
+    # Calculate portfolio volatilities using covariance matrix
     cov_matrix = returns.cov()
-    std_devs = np.sqrt(np.diag(cov_matrix))
-    correlation_matrix = cov_matrix / np.outer(std_devs, std_devs)
-    scaled_cov_matrix = correlation_matrix * np.outer(std_devs, std_devs)
-    portfolio_volatility = np.sqrt(np.einsum('ij,jk,ik->i', weights, scaled_cov_matrix, weights))
+    portfolio_volatility = np.sqrt(np.einsum('ij,jk,ik->i', weights, cov_matrix, weights))
     
     # Calculate Sharpe ratios (assuming 0 risk-free rate for simplicity)
     sharpe_ratios = portfolio_returns / portfolio_volatility
@@ -78,7 +75,6 @@ def calculate_gmvp(returns, allow_short=False):
     Args:
         returns: DataFrame of asset returns
         allow_short: Whether to allow short selling
-        max_leverage: Maximum allowed leverage when shorting
         
     Returns:
         tuple: (weights, return, volatility, sharpe_ratio)
@@ -86,10 +82,8 @@ def calculate_gmvp(returns, allow_short=False):
     n_assets = len(returns.columns)
     cov_matrix = returns.cov()
     
-    # Use correlation-adjusted covariance matrix
-    std_devs = np.sqrt(np.diag(cov_matrix))
-    correlation_matrix = cov_matrix / np.outer(std_devs, std_devs)
-    scaled_cov_matrix = correlation_matrix * np.outer(std_devs, std_devs)
+    def portfolio_variance(w):
+        return w.T @ cov_matrix @ w
     
     # Define optimization constraints
     constraints = [
@@ -101,19 +95,46 @@ def calculate_gmvp(returns, allow_short=False):
     else:
         bounds = tuple((0, 1) for _ in range(n_assets))
     
-    # Find GMVP using numerical optimization
-    result = sco.minimize(
-        lambda w: w.T @ scaled_cov_matrix @ w,  # Minimize portfolio variance
-        n_assets * [1. / n_assets],  # Start with equal weights
-        method='SLSQP',
-        bounds=bounds,
-        constraints=constraints
-    )
+    # Try multiple starting points to avoid local minima
+    best_result = None
+    min_variance = float('inf')
+    
+    # Try equal weights and random weights as starting points
+    starting_points = [
+        np.ones(n_assets) / n_assets,  # Equal weights
+        np.random.dirichlet(np.ones(n_assets)),  # Random weights
+        np.zeros(n_assets)  # Zero weights except one asset
+    ]
+    
+    # Add one-asset portfolios as starting points
+    for i in range(n_assets):
+        w = np.zeros(n_assets)
+        w[i] = 1
+        starting_points.append(w)
+    
+    for w0 in starting_points:
+        result = sco.minimize(
+            portfolio_variance,
+            w0,
+            method='SLSQP',
+            bounds=bounds,
+            constraints=constraints,
+            options={'ftol': 1e-12, 'maxiter': 1000}
+        )
+        
+        if result.success and result.fun < min_variance:
+            min_variance = result.fun
+            best_result = result
+    
+    if best_result is None:
+        raise ValueError("Failed to find GMVP")
+        
+    result = best_result
     w_gmvp = result.x
     
     # Calculate GMVP metrics
     return_gmvp = w_gmvp @ returns.mean()
-    vol_gmvp = np.sqrt(w_gmvp.T @ scaled_cov_matrix @ w_gmvp)
+    vol_gmvp = np.sqrt(portfolio_variance(w_gmvp))  # Use same variance calculation as optimization
     sharpe_gmvp = return_gmvp / vol_gmvp
     
     # Print warning if significant shorting is used
