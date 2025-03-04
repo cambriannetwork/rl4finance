@@ -148,7 +148,7 @@ def calculate_gmvp(returns, allow_short=False):
     
     return w_gmvp, return_gmvp, vol_gmvp, sharpe_gmvp, total_return_gmvp
 
-def plot_portfolios(returns, random_results, gmvp_results, save=False, period='daily'):
+def plot_portfolios(returns, random_results, gmvp_results, save=False, period='daily', return_type='arithmetic'):
     """Create and optionally save portfolio visualization with hover information.
     
     Args:
@@ -156,6 +156,8 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
         random_results: (weights, returns, vols, sharpe) for random portfolios
         gmvp_results: (weights, return, vol, sharpe) for GMVP
         save: Whether to save plots to files
+        period: Return calculation period (daily, weekly, monthly, quarterly, yearly)
+        return_type: Type of return calculation (arithmetic or log)
     """
     # Unpack results
     rand_weights, rand_rets, rand_vols, rand_sharpe, rand_total = random_results
@@ -211,7 +213,14 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
     plt.xlabel('Risk (Standard Deviation) %')
     plt.ylabel('Expected Return %')
     plt.colorbar(scatter, label='Sharpe Ratio')
-    plt.title('Portfolio Analysis')
+    
+    # Create descriptive title
+    plt.suptitle('Portfolio Analysis', y=0.95, fontsize=12)
+    plt.title(f'{", ".join(returns.columns)} | ' +  # Assets
+             f'{returns.index[0]:%Y-%m-%d} to {returns.index[-1]:%Y-%m-%d} | ' +  # Date range
+             f'{period.capitalize()} {return_type} returns',  # Analysis parameters
+             pad=15, fontsize=12)  # Match axis label font size
+    
     plt.legend(loc='lower left')
     plt.grid()
     
@@ -358,7 +367,7 @@ def main():
         
         # Plot results
         print("\nGenerating visualization...")
-        plot_portfolios(returns, random_results, gmvp_results, args.save_plots, args.period)
+        plot_portfolios(returns, random_results, gmvp_results, args.save_plots, args.period, args.return_type)
         
     except Exception as e:
         print(f"Error: {str(e)}")
