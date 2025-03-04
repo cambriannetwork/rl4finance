@@ -6,17 +6,20 @@ A Python project for portfolio optimization and cryptocurrency price data analys
 
 ```
 RL4Finance/
-├── appendix-b/
+├── appendix-b/          # Portfolio optimization scripts
 │   ├── frontier.py     # Portfolio optimization with efficient frontier
 │   ├── covariance.py   # Asset returns covariance/correlation analysis
 │   └── return_and_risk.py  # Return and risk analysis
-├── tools/
+├── tools/              # Utility scripts
 │   └── get_prices.py   # Crypto price data fetcher
 ├── common/             # Shared functionality
 │   └── data.py         # Data loading and processing functions
+├── data/               # Price data storage (created by setup)
 ├── setup.py            # Package installation configuration
 └── requirements.txt    # Project dependencies
 ```
+
+Note: The `data/` directory is automatically created during setup and is used to store price data files. This directory is excluded from version control.
 
 ## Features
 
@@ -82,22 +85,34 @@ The `get_prices.py` script fetches historical cryptocurrency price data using th
    cd RL4Finance
    ```
 
-2. Run the setup script:
+2. Run the setup script to create virtual environment and data directory:
    ```bash
-   ./setup.sh
+   ./create_venv.sh
    ```
 
-3. Install package in editable mode with dependencies:
-   ```bash
-   pip install -e .
-   ```
-
-4. Configure CoinGecko API:
+3. Configure CoinGecko API:
    - Create a `.env` file in the root directory
    - Add your CoinGecko Pro API key:
      ```
      COINGECKO_API_KEY=your_api_key_here
      ```
+
+## Project Structure
+
+```
+RL4Finance/
+├── appendix-b/          # Portfolio optimization scripts
+│   ├── frontier.py     # Portfolio optimization with efficient frontier
+│   ├── covariance.py   # Asset returns covariance/correlation analysis
+│   └── return_and_risk.py  # Return and risk analysis
+├── tools/              # Utility scripts
+│   └── get_prices.py   # Crypto price data fetcher
+├── common/             # Shared functionality
+│   └── data.py         # Data loading and processing functions
+├── data/               # Price data storage (created by setup)
+├── setup.py            # Package installation configuration
+└── requirements.txt    # Project dependencies
+```
 
 ## Usage
 
