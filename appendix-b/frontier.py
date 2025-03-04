@@ -215,8 +215,8 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
     plt.colorbar(scatter, label='Sharpe Ratio')
     
     # Create descriptive title
-    plt.suptitle('Portfolio Analysis', y=0.95, fontsize=12)
-    plt.title(f'{", ".join(returns.columns)} | ' +  # Assets
+    plt.title('Portfolio Analysis\n' +  # Main title
+             f'{", ".join(returns.columns)} | ' +  # Assets
              f'{returns.index[0]:%Y-%m-%d} to {returns.index[-1]:%Y-%m-%d} | ' +  # Date range
              f'{period.capitalize()} {return_type} returns',  # Analysis parameters
              pad=15, fontsize=12)  # Match axis label font size
