@@ -85,9 +85,13 @@ The `get_prices.py` script fetches historical cryptocurrency price data using th
    cd RL4Finance
    ```
 
-2. Run the setup script to create virtual environment and data directory:
+2. Set up the conda environment:
    ```bash
-   ./create_venv.sh
+   # Make sure you have conda installed (Miniconda or Anaconda)
+   ./create_conda_env.sh
+   
+   # Activate the environment
+   conda activate rl4finance
    ```
 
 3. Configure CoinGecko API:
@@ -216,4 +220,5 @@ python tools/get_prices.py --tokens ETH WBTC --days 90
 ## Requirements
 
 - Python 3.8+
-- See requirements.txt for package dependencies
+- Conda (Miniconda or Anaconda)
+- See environment.yml for package dependencies
