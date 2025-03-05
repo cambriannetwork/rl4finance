@@ -1,5 +1,7 @@
 # RL4Finance
 
+> **WARNING:** This repository was "vibe-coded" and is intended for educational purposes only. It serves as an experimental implementation of concepts from the book [Reinforcement Learning for Finance](https://stanford.edu/~ashlearn/RLForFinanceBook/book.pdf).
+
 A Python project for reinforcement learning in finance, portfolio optimization, and cryptocurrency price data analysis.
 
 ## Project Structure
