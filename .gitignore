@@ -9,6 +9,7 @@ __pycache__/
 
 # System files
 .DS_Store
+RL-book/
 
 # Generated files
 *.csv
