@@ -4,19 +4,18 @@ This script contains all necessary code from the RL package to run the model.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace, field
 from typing import (Callable, Dict, Generic, Iterator, Iterable, List, 
                    Mapping, Optional, Sequence, Tuple, TypeVar)
 from operator import itemgetter
 import numpy as np
-import random
-import time
-import argparse
+import itertools
 
 # Type variables
-S = TypeVar('S')
 A = TypeVar('A')
+S = TypeVar('S')
 X = TypeVar('X')
 F = TypeVar('F', bound='FunctionApprox')
 
@@ -40,12 +39,30 @@ class Distribution(ABC, Generic[A]):
         return [self.sample() for _ in range(n)]
 
     @abstractmethod
-    def expectation(self, f: Callable[[A], float]) -> float:
-        '''Return the expectation of f(X) where X is the
+    def expectation(
+        self,
+        f: Callable[[A], float]
+    ) -> float:
+        '''Return the expecation of f(X) where X is the
         random variable for the distribution and f is an
         arbitrary function from X to float
         '''
         pass
+
+    def apply(
+        self,
+        f: Callable[[A], Distribution[B]]
+    ) -> Distribution[B]:
+        '''Apply a function that returns a distribution to the outcomes of
+        this distribution. This lets us express *dependent random
+        variables*.
+        '''
+        def sample():
+            a = self.sample()
+            b_dist = f(a)
+            return b_dist.sample()
+
+        return SampledDistribution(sample)
 
 
 class SampledDistribution(Distribution[A]):
@@ -65,38 +82,13 @@ class SampledDistribution(Distribution[A]):
     def sample(self) -> A:
         return self.sampler()
 
-    def expectation(self, f: Callable[[A], float]) -> float:
+    def expectation(
+        self,
+        f: Callable[[A], float]
+    ) -> float:
         '''Return a sampled approximation of the expectation of f(X) for some f.'''
-        # Get verbose level from globals if available
-        verbose = globals().get('verbose', 0)
-        
-        # Only show progress for large sample sizes and only during initial setup
-        # Not during the main backward induction calculations
-        show_progress = verbose > 1 and self.expectation_samples > 100
-        
-        # Track if we're in the backward induction phase
-        in_backward_induction = globals().get('_in_backward_induction', False)
-        
-        # Don't show progress during backward induction to avoid excessive output
-        if in_backward_induction:
-            show_progress = False
-        
-        if show_progress:
-            print(f"    Monte Carlo sampling with {self.expectation_samples} samples...", end="\r")
-            
-        total = 0.0
-        for i in range(self.expectation_samples):
-            total += f(self.sample())
-            
-            # Show progress every 10% of samples
-            if show_progress and i % max(1, self.expectation_samples // 10) == 0 and i > 0:
-                progress = i / self.expectation_samples * 100
-                print(f"    Monte Carlo progress: {progress:.1f}% complete", end="\r")
-                
-        if show_progress:
-            print("    Monte Carlo sampling completed.                    ")
-            
-        return total / self.expectation_samples
+        return sum(f(self.sample()) for _ in
+                   range(self.expectation_samples)) / self.expectation_samples
 
 
 class Gaussian(SampledDistribution[float]):
@@ -105,14 +97,12 @@ class Gaussian(SampledDistribution[float]):
     μ: float
     σ: float
 
-    def __init__(self, μ: float, σ: float, expectation_samples: int = None):
+    def __init__(self, μ: float, σ: float, expectation_samples: int = 1000):
         self.μ = μ
         self.σ = σ
-        # Use the global expectation_samples parameter if none is provided
-        samples = expectation_samples if expectation_samples is not None else globals().get('expectation_samples', 1000)
         super().__init__(
             sampler=lambda: np.random.normal(loc=self.μ, scale=self.σ),
-            expectation_samples=samples
+            expectation_samples=expectation_samples
         )
 
 
@@ -125,11 +115,24 @@ class Choose(Distribution[A]):
         self.options = list(options)
 
     def sample(self) -> A:
+        import random
         return random.choice(self.options)
 
     def expectation(self, f: Callable[[A], float]) -> float:
         '''Calculate expectation by averaging over all possible outcomes.'''
         return sum(f(option) for option in self.options) / len(self.options)
+
+
+@dataclass(frozen=True)
+class Constant(Distribution[A]):
+    '''A distribution that has a single outcome with probability 1.'''
+    value: A
+
+    def sample(self) -> A:
+        return self.value
+
+    def expectation(self, f: Callable[[A], float]) -> float:
+        return f(self.value)
 
 
 ######################
@@ -203,19 +206,108 @@ class Policy(ABC, Generic[S, A]):
 class DeterministicPolicy(Policy[S, A]):
     action_for: Callable[[S], A]
 
-    def act(self, state: NonTerminal[S]) -> Distribution[A]:
-        # We'll create a simple distribution that always returns the same action
-        class ConstantDistribution(Distribution[A]):
-            def __init__(self, value: A):
-                self.value = value
-                
-            def sample(self) -> A:
-                return self.value
-                
-            def expectation(self, f: Callable[[A], float]) -> float:
-                return f(self.value)
-                
-        return ConstantDistribution(self.action_for(state.state))
+    def act(self, state: NonTerminal[S]) -> Constant[A]:
+        return Constant(self.action_for(state.state))
+
+
+###############
+# Iterate.py #
+###############
+
+def iterate(step: Callable[[X], X], start: X) -> Iterator[X]:
+    '''Find the fixed point of a function f by applying it to its own
+    result, yielding each intermediate value.
+
+    That is, for a function f, iterate(f, x) will give us a generator
+    producing:
+
+    x, f(x), f(f(x)), f(f(f(x)))...
+    '''
+    state = start
+
+    while True:
+        yield state
+        state = step(state)
+
+
+def last(values: Iterator[X]) -> Optional[X]:
+    '''Return the last value of the given iterator.
+
+    Returns None if the iterator is empty.
+
+    If the iterator does not end, this function will loop forever.
+    '''
+    try:
+        *_, last_element = values
+        return last_element
+    except ValueError:
+        return None
+
+
+def converge(values: Iterator[X], done: Callable[[X, X], bool]) -> Iterator[X]:
+    '''Read from an iterator until two consecutive values satisfy the
+    given done function or the input iterator ends.
+
+    Raises an error if the input iterator is empty.
+
+    Will loop forever if the input iterator doesn't end *or* converge.
+    '''
+    a = next(values, None)
+    if a is None:
+        return
+
+    yield a
+
+    for b in values:
+        yield b
+        if done(a, b):
+            return
+
+        a = b
+
+
+def converged(values: Iterator[X],
+              done: Callable[[X, X], bool]) -> X:
+    '''Return the final value of the given iterator when its values
+    converge according to the done function.
+
+    Raises an error if the iterator is empty.
+
+    Will loop forever if the input iterator doesn't end *or* converge.
+    '''
+    result = last(converge(values, done))
+
+    if result is None:
+        raise ValueError("converged called on an empty iterator")
+
+    return result
+
+
+def accumulate(
+        iterable: Iterable[X],
+        func: Callable[[Y, X], Y],
+        *,
+        initial: Optional[Y]
+) -> Iterator[Y]:
+    '''Make an iterator that returns accumulated sums, or accumulated
+    results of other binary functions (specified via the optional func
+    argument).
+
+    If func is supplied, it should be a function of two
+    arguments. Elements of the input iterable may be any type that can
+    be accepted as arguments to func. (For example, with the default
+    operation of addition, elements may be any addable type including
+    Decimal or Fraction.)
+
+    Usually, the number of elements output matches the input
+    iterable. However, if the keyword argument initial is provided,
+    the accumulation leads off with the initial value so that the
+    output has one more element than the input iterable.
+    '''
+    if initial is not None:
+        iterable = itertools.chain([initial], iterable)  # type: ignore
+
+    return itertools.accumulate(iterable, func)  # type: ignore
 
 
 #######################
@@ -238,6 +330,17 @@ class FunctionApprox(ABC, Generic[X]):
         pass
 
     @abstractmethod
+    def objective_gradient(
+        self: F,
+        xy_vals_seq: Iterable[Tuple[X, float]],
+        obj_deriv_out_fun: Callable[[Sequence[X], Sequence[float]], np.ndarray]
+    ) -> Gradient[F]:
+        '''Computes the gradient of an objective function of the self
+        FunctionApprox with respect to the parameters in the internal
+        representation of the FunctionApprox.
+        '''
+
+    @abstractmethod
     def evaluate(self, x_values_seq: Iterable[X]) -> np.ndarray:
         '''Computes expected value of y for each x in
         x_values_seq (with the probability distribution
@@ -248,6 +351,14 @@ class FunctionApprox(ABC, Generic[X]):
         return self.evaluate([x_value]).item()
 
     @abstractmethod
+    def update_with_gradient(
+        self: F,
+        gradient: Gradient[F]
+    ) -> F:
+        '''Update the internal parameters of self FunctionApprox using the
+        input gradient that is presented as a Gradient[FunctionApprox]
+        '''
+
     def update(
         self: F,
         xy_vals_seq: Iterable[Tuple[X, float]]
@@ -256,6 +367,12 @@ class FunctionApprox(ABC, Generic[X]):
         based on incremental data provided in the form of (x,y)
         pairs as a xy_vals_seq data structure
         '''
+        def deriv_func(x: Sequence[X], y: Sequence[float]) -> np.ndarray:
+            return self.evaluate(x) - np.array(y)
+
+        return self.update_with_gradient(
+            self.objective_gradient(xy_vals_seq, deriv_func)
+        )
 
     @abstractmethod
     def solve(
@@ -267,6 +384,12 @@ class FunctionApprox(ABC, Generic[X]):
         in the form of the given input xy_vals_seq data structure,
         solve for the internal parameters of the FunctionApprox
         such that the internal parameters are fitted to xy_vals_seq.
+        '''
+        
+    @abstractmethod
+    def within(self: F, other: F, tolerance: float) -> bool:
+        '''Is this function approximation within a given tolerance of
+        another function approximation of the same type?
         '''
 
 
@@ -346,6 +469,9 @@ class Weights:
             adam_cache2=new_adam_cache2,
         )
 
+    def within(self, other: Weights, tolerance: float) -> bool:
+        return np.all(np.abs(self.weights - other.weights) <= tolerance).item()
+
 
 @dataclass(frozen=True)
 class DNNSpec:
@@ -359,6 +485,7 @@ class DNNSpec:
 
 @dataclass(frozen=True)
 class DNNApprox(FunctionApprox[X]):
+
     feature_functions: Sequence[Callable[[X], float]]
     dnn_spec: DNNSpec
     regularization_coeff: float
@@ -506,22 +633,6 @@ class DNNApprox(FunctionApprox[X]):
                      for w in self.weights]
         )
 
-    def update(
-        self,
-        xy_vals_seq: Iterable[Tuple[X, float]]
-    ) -> DNNApprox[X]:
-        def deriv_func(x: Sequence[X], y: Sequence[float]) -> np.ndarray:
-            return self.dnn_spec.output_activation_deriv(
-                np.dot(
-                    self.forward_propagation(x)[-2],
-                    self.weights[-1].weights.T
-                )[:, 0]
-            ) * (self.evaluate(x) - np.array(y))
-
-        return self.update_with_gradient(
-            self.objective_gradient(xy_vals_seq, deriv_func)
-        )
-
     def update_with_gradient(
         self,
         gradient: Gradient[DNNApprox[X]]
@@ -537,32 +648,44 @@ class DNNApprox(FunctionApprox[X]):
         xy_vals_seq: Iterable[Tuple[X, float]],
         error_tolerance: Optional[float] = None
     ) -> DNNApprox[X]:
-        # Get verbose level from globals if available
-        verbose = globals().get('verbose', 0)
-        solve_iterations = globals().get('solve_iterations', 10)
-        
-        # Convert xy_vals_seq to a list for multiple iterations
-        result = self
-        xy_list = list(xy_vals_seq)
-        
-        if verbose > 1:
-            print(f"    Starting function approximation with {solve_iterations} iterations...")
-        
-        # Perform multiple update iterations
-        for i in range(solve_iterations):
-            # Shuffle the data for each epoch
-            random.shuffle(xy_list)
-            result = result.update(xy_list)
-            
-            # Show progress every 10% of iterations
-            if verbose > 1 and i % max(1, solve_iterations // 10) == 0 and i > 0:
-                progress = i / solve_iterations * 100
-                print(f"    Function approximation progress: {progress:.1f}% complete", end="\r")
-                
-        if verbose > 1:
-            print("    Function approximation completed.                                                ")
-            
-        return result
+        tol: float = 1e-6 if error_tolerance is None else error_tolerance
+
+        def done(
+            a: DNNApprox[X],
+            b: DNNApprox[X],
+            tol: float = tol
+        ) -> bool:
+            return a.within(b, tol)
+
+        return converged(
+            self.iterate_updates(
+                itertools.repeat(list(xy_vals_seq))
+            ),
+            done=done
+        )
+
+    def within(self, other: FunctionApprox[X], tolerance: float) -> bool:
+        if isinstance(other, DNNApprox):
+            return all(np.all(np.abs(w1.weights - w2.weights) <= tolerance)
+                       for w1, w2 in zip(self.weights, other.weights))
+        return False
+
+
+    def iterate_updates(
+        self: F,
+        xy_seq_stream: Iterator[Iterable[Tuple[X, float]]]
+    ) -> Iterator[F]:
+        '''Given a stream (Iterator) of data sets of (x,y) pairs,
+        perform a series of incremental updates to the internal
+        parameters (using update method), with each internal
+        parameter update done for each data set of (x,y) pairs in the
+        input stream of xy_seq_stream
+        '''
+        return accumulate(
+            xy_seq_stream,
+            lambda fa, xy: fa.update(xy),
+            initial=self
+        )
 
 
 #################################
@@ -577,28 +700,6 @@ NTStateDistribution = Distribution[NonTerminal[S]]
 
 def extended_vf(vf: ValueFunctionApprox[S], s: State[S]) -> float:
     return s.on_non_terminal(vf, 0.0)
-
-
-# Simplified iterate function
-def iterate(step: Callable[[X], X], start: X) -> Iterator[X]:
-    '''Find the fixed point of a function f by applying it to its own
-    result, yielding each intermediate value.
-    '''
-    state = start
-    while True:
-        yield state
-        state = step(state)
-
-
-# Simplified converged function
-def converged(values: Iterator[X], done: Callable[[X, X], bool]) -> X:
-    '''Return the final value when values converge according to done function.'''
-    a = next(values)
-    for b in values:
-        if done(a, b):
-            return b
-        a = b
-    return a
 
 
 MDP_FuncApproxV_Distribution = Tuple[
@@ -618,10 +719,6 @@ def back_opt_vf_and_policy(
     policy at each time step, using the given FunctionApprox for each time step
     for a random sample of the time step's states.
     '''
-    # Set a global flag to indicate we're in backward induction
-    # This will suppress excessive Monte Carlo progress messages
-    globals()['_in_backward_induction'] = True
-    
     vp: List[Tuple[ValueFunctionApprox[S], DeterministicPolicy[S, A]]] = []
 
     for i, (mdp, approx0, mu) in enumerate(reversed(mdp_f0_mu_triples)):
@@ -645,9 +742,6 @@ def back_opt_vf_and_policy(
             )[1]
 
         vp.append((this_v, DeterministicPolicy(deter_policy)))
-    
-    # Reset the backward induction flag
-    globals()['_in_backward_induction'] = False
 
     return reversed(vp)
 
@@ -669,33 +763,11 @@ def back_opt_qvf(
     each time step, using the given FunctionApprox (for Q-Value) for each time
     step for a random sample of the time step's states.
     '''
-    # Set a global flag to indicate we're in backward induction
-    # This will suppress excessive Monte Carlo progress messages
-    globals()['_in_backward_induction'] = True
-    
     horizon: int = len(mdp_f0_mu_triples)
     qvf: List[QValueFunctionApprox[S, A]] = []
-    
-    # Get verbose level from globals if available
-    verbose = globals().get('verbose', 0)
-    
-    if verbose > 0:
-        print("Starting backward induction process...")
-        print(f"Horizon: {horizon} time steps")
-        print(f"State samples: {num_state_samples}")
-        print()
-        
-    # Start timing the entire process
-    start_time_total = time.time()
 
     for i, (mdp, approx0, mu) in enumerate(reversed(mdp_f0_mu_triples)):
-        # Start timing this time step
-        start_time_step = time.time()
-        
-        if verbose > 0:
-            time_index = horizon - i - 1
-            print(f"Processing time step {time_index} ({i+1}/{horizon})...")
-            
+
         def return_(s_r: Tuple[State[S], float], i=i) -> float:
             s1, r = s_r
             next_return: float = max(
@@ -703,67 +775,15 @@ def back_opt_qvf(
                 mdp_f0_mu_triples[horizon - i][0].actions(s1)
             ) if i > 0 and isinstance(s1, NonTerminal) else 0.
             return r + γ * next_return
-        
-        # Generate state-action pairs
-        if verbose > 1:
-            print(f"  Generating {num_state_samples} state samples...")
-            
-        states = mu.sample_n(num_state_samples)
-        
-        # Start timing the expectation calculations
-        start_time_expect = time.time()
-        
-        if verbose > 1:
-            print(f"  Computing expectations for state-action pairs...")
-            
-        xy_vals = []
-        total_pairs = num_state_samples * len(list(mdp.actions(states[0])))
-        
-        for idx, s in enumerate(states):
-            for a in mdp.actions(s):
-                if verbose > 1 and idx % 5 == 0:
-                    progress = (idx * len(list(mdp.actions(s))) + len(list(mdp.actions(s)))) / total_pairs * 100
-                    print(f"  Progress: {progress:.1f}% complete", end="\r", flush=True)
-                    
-                xy_vals.append(((s, a), mdp.step(s, a).expectation(return_)))
-        
-        # End timing the expectation calculations
-        expect_time = time.time() - start_time_expect
-        if verbose > 0:
-            print(f"  Expectation calculations completed in {expect_time:.2f} seconds.")
-        
-        # Start timing the function approximation
-        start_time_solve = time.time()
-        
-        if verbose > 1:
-            print(f"  Solving function approximation...")
-            
-        this_qvf = approx0.solve(xy_vals, error_tolerance)
-        
-        # End timing the function approximation
-        solve_time = time.time() - start_time_solve
-        if verbose > 0:
-            print(f"  Function approximation completed in {solve_time:.2f} seconds.")
-            
-        qvf.append(this_qvf)
-        
-        # End timing this time step
-        step_time = time.time() - start_time_step
-        
-        if verbose > 0:
-            print(f"  Time step {time_index} completed in {step_time:.2f} seconds.")
-            print()
 
-    # End timing the entire process
-    total_time = time.time() - start_time_total
-    
-    if verbose > 0:
-        print(f"Backward induction completed in {total_time:.2f} seconds.")
-        print()
-    
-    # Reset the backward induction flag
-    globals()['_in_backward_induction'] = False
-        
+        this_qvf = approx0.solve(
+            [((s, a), mdp.step(s, a).expectation(return_))
+             for s in mu.sample_n(num_state_samples) for a in mdp.actions(s)],
+            error_tolerance
+        )
+
+        qvf.append(this_qvf)
+
     return reversed(qvf)
 
 
@@ -829,10 +849,9 @@ class AssetAllocDiscrete:
 
         return AssetAllocMDP()
 
-    def get_qvf_func_approx(self) -> DNNApprox[Tuple[NonTerminal[float], float]]:
-        """
-        Create a DNN function approximation for Q-Value function
-        """
+    def get_qvf_func_approx(self) -> \
+            DNNApprox[Tuple[NonTerminal[float], float]]:
+
         adam_gradient: AdamGradient = AdamGradient(
             learning_rate=0.1,
             decay1=0.9,
@@ -850,10 +869,9 @@ class AssetAllocDiscrete:
             adam_gradient=adam_gradient
         )
 
-    def get_states_distribution(self, t: int) -> SampledDistribution[NonTerminal[float]]:
-        """
-        Create a distribution of states for time t
-        """
+    def get_states_distribution(self, t: int) -> \
+            SampledDistribution[NonTerminal[float]]:
+
         actions_distr: Choose[float] = self.uniform_actions()
 
         def states_sampler_func() -> NonTerminal[float]:
@@ -868,10 +886,9 @@ class AssetAllocDiscrete:
 
         return SampledDistribution(states_sampler_func)
 
-    def backward_induction_qvf(self) -> Iterator[QValueFunctionApprox[float, float]]:
-        """
-        Perform backward induction to find the optimal Q-Value function
-        """
+    def backward_induction_qvf(self) -> \
+            Iterator[QValueFunctionApprox[float, float]]:
+
         init_fa: DNNApprox[Tuple[NonTerminal[float], float]] = \
             self.get_qvf_func_approx()
 
@@ -885,7 +902,7 @@ class AssetAllocDiscrete:
             self.get_states_distribution(i)
         ) for i in range(self.time_steps())]
 
-        num_state_samples: int = globals().get('state_samples', 300)
+        num_state_samples: int = 300
         error_tolerance: float = 1e-6
 
         return back_opt_qvf(
@@ -895,57 +912,66 @@ class AssetAllocDiscrete:
             error_tolerance=error_tolerance
         )
 
+    def get_vf_func_approx(
+        self,
+        ff: Sequence[Callable[[NonTerminal[float]], float]]
+    ) -> DNNApprox[NonTerminal[float]]:
+
+        adam_gradient: AdamGradient = AdamGradient(
+            learning_rate=0.1,
+            decay1=0.9,
+            decay2=0.999
+        )
+        return DNNApprox.create(
+            feature_functions=ff,
+            dnn_spec=self.dnn_spec,
+            adam_gradient=adam_gradient
+        )
+
+    def backward_induction_vf_and_pi(
+        self,
+        ff: Sequence[Callable[[NonTerminal[float]], float]]
+    ) -> Iterator[Tuple[ValueFunctionApprox[float],
+                        DeterministicPolicy[float, float]]]:
+
+        init_fa: DNNApprox[NonTerminal[float]] = self.get_vf_func_approx(ff)
+
+        mdp_f0_mu_triples: Sequence[Tuple[
+            MarkovDecisionProcess[float, float],
+            DNNApprox[NonTerminal[float]],
+            SampledDistribution[NonTerminal[float]]
+        ]] = [(
+            self.get_mdp(i),
+            init_fa,
+            self.get_states_distribution(i)
+        ) for i in range(self.time_steps())]
+
+        num_state_samples: int = 300
+        error_tolerance: float = 1e-8
+
+        return back_opt_vf_and_policy(
+            mdp_f0_mu_triples=mdp_f0_mu_triples,
+            γ=1.0,
+            num_state_samples=num_state_samples,
+            error_tolerance=error_tolerance
+        )
+
 
 if __name__ == '__main__':
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Asset Allocation Discrete Model')
-    parser.add_argument('--time-steps', type=int, default=2, help='Number of time steps')
-    parser.add_argument('--expectation-samples', type=int, default=1000, help='Number of samples for expectation calculations')
-    parser.add_argument('--solve-iterations', type=int, default=10, help='Number of iterations for function approximation')
-    parser.add_argument('--state-samples', type=int, default=300, help='Number of state samples for backward induction')
-    parser.add_argument('--verbose', type=int, default=0, choices=[0, 1, 2], help='Verbosity level (0=minimal, 1=normal, 2=detailed)')
-    parser.add_argument('--mu', type=float, default=0.13, help='Mean of risky return distribution')
-    parser.add_argument('--sigma', type=float, default=0.2, help='Standard deviation of risky return distribution')
-    parser.add_argument('--rate', type=float, default=0.07, help='Riskless return rate')
-    parser.add_argument('--risk-aversion', type=float, default=1.0, help='Risk aversion parameter')
-    args = parser.parse_args()
 
-    # Set global parameters
-    globals()['verbose'] = args.verbose
-    globals()['expectation_samples'] = args.expectation_samples
-    globals()['solve_iterations'] = args.solve_iterations
-    globals()['state_samples'] = args.state_samples
-    globals()['_in_backward_induction'] = False
+    from pprint import pprint
 
-    # Print parameters
-    print("Asset Allocation Discrete Model")
-    print("==============================")
-    print("Parameters:")
-    print(f"  Time steps: {args.time_steps}")
-    print(f"  Expectation samples: {args.expectation_samples}")
-    print(f"  Solve iterations: {args.solve_iterations}")
-    print(f"  State samples: {args.state_samples}")
-    print(f"  Verbosity level: {args.verbose}")
-    print(f"  μ (risky return mean): {args.mu}")
-    print(f"  σ (risky return std): {args.sigma}")
-    print(f"  r (riskless return): {args.rate}")
-    print(f"  a (risk aversion): {args.risk_aversion}")
-
-    # Calculate base allocation
-    excess: float = args.mu - args.rate
-    var: float = args.sigma * args.sigma
-    base_alloc: float = excess / (args.risk_aversion * var)
-    print(f"  Base allocation: {base_alloc:.3f}")
-    print()
-
-    # Setup model parameters
-    steps: int = args.time_steps
-    μ: float = args.mu
-    σ: float = args.sigma
-    r: float = args.rate
-    a: float = args.risk_aversion
+    steps: int = 4
+    μ: float = 0.13
+    σ: float = 0.2
+    r: float = 0.07
+    a: float = 1.0
     init_wealth: float = 1.0
     init_wealth_stdev: float = 0.1
+
+    excess: float = μ - r
+    var: float = σ * σ
+    base_alloc: float = excess / (a * var)
 
     risky_ret: Sequence[Gaussian] = [Gaussian(μ=μ, σ=σ) for _ in range(steps)]
     riskless_ret: Sequence[float] = [r for _ in range(steps)]
@@ -972,7 +998,6 @@ if __name__ == '__main__':
     )
     init_wealth_distr: Gaussian = Gaussian(μ=init_wealth, σ=init_wealth_stdev)
 
-    # Create model
     aad: AssetAllocDiscrete = AssetAllocDiscrete(
         risky_return_distributions=risky_ret,
         riskless_returns=riskless_ret,
@@ -983,11 +1008,27 @@ if __name__ == '__main__':
         initial_wealth_distribution=init_wealth_distr
     )
 
-    # Run backward induction
+    # vf_ff: Sequence[Callable[[NonTerminal[float]], float]] = [lambda _: 1., lambda w: w.state]
+    # it_vf: Iterator[Tuple[DNNApprox[NonTerminal[float]], DeterministicPolicy[float, float]]] = \
+    #     aad.backward_induction_vf_and_pi(vf_ff)
+
+    # print("Backward Induction: VF And Policy")
+    # print("---------------------------------")
+    # print()
+    # for t, (v, p) in enumerate(it_vf):
+    #     print(f"Time {t:d}")
+    #     print()
+    #     opt_alloc: float = p.action_for(init_wealth)
+    #     val: float = v(NonTerminal(init_wealth))
+    #     print(f"Opt Risky Allocation = {opt_alloc:.2f}, Opt Val = {val:.3f}")
+    #     print("Weights")
+    #     for w in v.weights:
+    #         print(w.weights)
+    #     print()
+
     it_qvf: Iterator[QValueFunctionApprox[float, float]] = \
         aad.backward_induction_qvf()
 
-    # Print results
     print("Backward Induction on Q-Value Function")
     print("--------------------------------------")
     print()
@@ -1003,10 +1044,9 @@ if __name__ == '__main__':
         print(f"Opt Risky Allocation = {opt_alloc:.3f}, Opt Val = {val:.3f}")
         print("Optimal Weights below:")
         for wts in q.weights:
-            print(wts.weights)
+            pprint(wts.weights)
         print()
 
-    # Print analytical solution
     print("Analytical Solution")
     print("-------------------")
     print()

@@ -10,7 +10,8 @@ A Python project for reinforcement learning in finance, portfolio optimization, 
 RL4Finance/
 ├── chapters/           # Reinforcement learning models
 │   └── 7/              # Chapter 7 models
-│       └── asset_alloc_discrete.py  # Discrete asset allocation model
+│       ├── asset_alloc_discrete.py  # Discrete asset allocation model
+│       └── asset_alloc_discrete_standalone.py  # Standalone implementation
 ├── appendix-b/          # Portfolio optimization scripts
 │   ├── frontier.py     # Portfolio optimization with efficient frontier
 │   ├── covariance.py   # Asset returns covariance/correlation analysis
@@ -65,6 +66,34 @@ python chapters/7/asset_alloc_discrete.py --time-steps 3 --verbose 1 --mu 0.15 -
 # Detailed output with timing information
 python chapters/7/asset_alloc_discrete.py --verbose 2 --state-samples 500
 ```
+
+#### Standalone Asset Allocation Model (chapters/7/asset_alloc_discrete_standalone.py)
+
+This is a standalone implementation of the asset allocation discrete model that doesn't require the RL package. It includes all necessary code from the RL package directly in a single file:
+
+- Complete implementation of Distribution classes (Gaussian, Choose, Constant, etc.)
+- Markov Decision Process (MDP) implementation
+- Function approximation with DNNApprox
+- Iterate module for convergence calculations
+- Backward induction algorithms
+
+Features:
+- Self-contained implementation with no external dependencies (except NumPy)
+- Identical results to the reference implementation
+- Simplified usage without needing to install the RL package
+- Matches the analytical solution for optimal asset allocation
+
+Usage:
+```bash
+# Run the standalone implementation
+python chapters/7/asset_alloc_discrete_standalone.py
+```
+
+The output shows:
+1. Backward induction results for each time step
+2. Optimal risky asset allocation and value
+3. Optimal weights for the function approximation
+4. Analytical solution for comparison
 
 ### Portfolio Optimization (appendix-b/)
 
