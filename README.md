@@ -10,7 +10,6 @@ A Python project for reinforcement learning in finance, portfolio optimization, 
 RL4Finance/
 ├── chapters/           # Reinforcement learning models
 │   └── 7/              # Chapter 7 models
-│       ├── asset_alloc_discrete.py  # Discrete asset allocation model
 │       └── asset_alloc_discrete_standalone.py  # Standalone implementation
 ├── appendix-b/          # Portfolio optimization scripts
 │   ├── frontier.py     # Portfolio optimization with efficient frontier
@@ -31,43 +30,7 @@ Note: The `data/` directory is automatically created during setup and is used to
 
 ### Reinforcement Learning Models (chapters/)
 
-#### Asset Allocation Discrete Model (chapters/7/asset_alloc_discrete.py)
-
-This script implements a discrete asset allocation model using reinforcement learning techniques:
-- Markov Decision Process (MDP) formulation for asset allocation
-- Backward induction for optimal Q-value function approximation
-- Deep Neural Network (DNN) function approximation
-- Monte Carlo sampling for expectation calculations
-- Comparison with analytical solution
-
-Features:
-- Configurable parameters:
-  - Time steps
-  - Expectation samples
-  - Solve iterations
-  - State samples
-  - Verbosity level
-  - Risky return mean (μ)
-  - Risky return standard deviation (σ)
-  - Riskless return rate (r)
-  - Risk aversion parameter (a)
-- Progress reporting with different verbosity levels
-- Timing information for performance analysis
-- Analytical solution comparison
-
-Usage:
-```bash
-# Basic usage with default parameters
-python chapters/7/asset_alloc_discrete.py
-
-# With custom parameters
-python chapters/7/asset_alloc_discrete.py --time-steps 3 --verbose 1 --mu 0.15 --sigma 0.25 --rate 0.05 --risk-aversion 2.0
-
-# Detailed output with timing information
-python chapters/7/asset_alloc_discrete.py --verbose 2 --state-samples 500
-```
-
-#### Standalone Asset Allocation Model (chapters/7/asset_alloc_discrete_standalone.py)
+#### Asset Allocation Discrete Model (chapters/7/asset_alloc_discrete_standalone.py)
 
 This is a standalone implementation of the asset allocation discrete model that doesn't require the RL package. It includes all necessary code from the RL package directly in a single file:
 
