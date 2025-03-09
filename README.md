@@ -10,7 +10,14 @@ A Python project for reinforcement learning in finance, portfolio optimization, 
 RL4Finance/
 ├── chapters/           # Reinforcement learning models
 │   └── 7/              # Chapter 7 models
-│       └── asset_alloc_discrete_standalone.py  # Standalone implementation
+│       └── asset_alloc.py  # Implementation using rl_lib
+├── rl_lib/             # Modular reinforcement learning library
+│   ├── distribution/   # Probability distributions
+│   ├── mdp/            # Markov Decision Processes
+│   ├── function_approx/# Function approximation
+│   ├── utils/          # Utility functions
+│   ├── adp/            # Approximate Dynamic Programming
+│   └── tests/          # Unit tests
 ├── appendix-b/          # Portfolio optimization scripts
 │   ├── frontier.py     # Portfolio optimization with efficient frontier
 │   ├── covariance.py   # Asset returns covariance/correlation analysis
@@ -28,28 +35,50 @@ Note: The `data/` directory is automatically created during setup and is used to
 
 ## Features
 
-### Reinforcement Learning Models (chapters/)
+### Reinforcement Learning Library (rl_lib/)
 
-#### Asset Allocation Discrete Model (chapters/7/asset_alloc_discrete_standalone.py)
+The `rl_lib` package is a modular reinforcement learning library that provides components for building and solving reinforcement learning problems. It includes:
 
-This is a standalone implementation of the asset allocation discrete model that doesn't require the RL package. It includes all necessary code from the RL package directly in a single file:
-
-- Complete implementation of Distribution classes (Gaussian, Choose, Constant, etc.)
-- Markov Decision Process (MDP) implementation
-- Function approximation with DNNApprox
-- Iterate module for convergence calculations
-- Backward induction algorithms
+- **Distribution Module**: Classes for probability distributions (Gaussian, Choose, Constant, etc.)
+- **MDP Module**: Classes for Markov Decision Processes, states, and policies
+- **Function Approximation Module**: Neural network function approximation with Adam optimization
+- **Utils Module**: Utility functions for iteration, convergence, and accumulation
+- **ADP Module**: Approximate Dynamic Programming algorithms including backward induction
 
 Features:
-- Self-contained implementation with no external dependencies (except NumPy)
-- Identical results to the reference implementation
-- Simplified usage without needing to install the RL package
+- Modular design with clear separation of concerns
+- Type hints for better code readability and IDE support
+- Comprehensive docstrings for all classes and methods
+- Unit tests to verify functionality
+
+Installation:
+```bash
+# Install the rl_lib package in development mode
+cd rl_lib
+pip install -e .
+```
+
+### Reinforcement Learning Models (chapters/)
+
+#### Asset Allocation Discrete Model (chapters/7/asset_alloc.py)
+
+This implementation uses the modular `rl_lib` package to solve the asset allocation problem:
+
+- Uses the Distribution classes from rl_lib.distribution
+- Leverages the MDP framework from rl_lib.mdp
+- Employs function approximation from rl_lib.function_approx
+- Applies backward induction algorithms from rl_lib.adp
+
+Features:
+- Modular implementation that demonstrates the use of the rl_lib package
+- Identical results to the standalone implementation
+- Cleaner code with better separation of concerns
 - Matches the analytical solution for optimal asset allocation
 
 Usage:
 ```bash
-# Run the standalone implementation
-python chapters/7/asset_alloc_discrete_standalone.py
+# Run the implementation using rl_lib
+python chapters/7/asset_alloc.py
 ```
 
 The output shows:
