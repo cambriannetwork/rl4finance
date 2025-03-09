@@ -13,11 +13,13 @@ from rl_lib import mdp
 from rl_lib import function_approx
 from rl_lib import utils
 from rl_lib import adp
+from rl_lib import logging
 
 __all__ = [
     'distribution',
     'mdp',
     'function_approx',
     'utils',
-    'adp'
+    'adp',
+    'logging'
 ]
