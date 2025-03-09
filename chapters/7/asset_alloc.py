@@ -14,7 +14,7 @@ from rl_lib.distribution import Gaussian, Choose, Constant
 from rl_lib.mdp import State, Terminal, NonTerminal, MarkovDecisionProcess, DeterministicPolicy
 from rl_lib.function_approx import DNNSpec, DNNApprox, AdamGradient
 from rl_lib.adp import back_opt_vf_and_policy, back_opt_qvf
-from rl_lib.logging import setup_logger, get_logger, log_phase, log_weights_summary, log_convergence, log_iteration
+from rl_lib.logging.logger import setup_logger, get_logger, log_phase, log_weights_summary, log_convergence, log_iteration
 
 @dataclass(frozen=True)
 class AssetAllocDiscrete:

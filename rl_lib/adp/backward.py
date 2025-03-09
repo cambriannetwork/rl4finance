@@ -14,7 +14,7 @@ from rl_lib.mdp.state import State, NonTerminal
 from rl_lib.mdp.process import MarkovDecisionProcess
 from rl_lib.mdp.policy import Policy, DeterministicPolicy
 from rl_lib.function_approx.base import FunctionApprox
-from rl_lib.logging import get_logger, log_phase, log_convergence, log_weights_summary
+from rl_lib.logging.logger import get_logger, log_phase, log_weights_summary, log_convergence
 
 # Type variables
 S = TypeVar('S')  # State type
