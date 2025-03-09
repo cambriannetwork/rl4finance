@@ -17,6 +17,7 @@ RL4Finance/
 │   ├── function_approx/# Function approximation
 │   ├── utils/          # Utility functions
 │   ├── adp/            # Approximate Dynamic Programming
+│   ├── logging/        # JSON-formatted logging functionality
 │   └── tests/          # Unit tests
 ├── appendix-b/          # Portfolio optimization scripts
 │   ├── frontier.py     # Portfolio optimization with efficient frontier
@@ -27,6 +28,7 @@ RL4Finance/
 ├── common/             # Shared functionality
 │   └── data.py         # Data loading and processing functions
 ├── data/               # Price data storage (created by setup)
+├── logs/               # JSON log files (created at runtime)
 ├── setup.py            # Package installation configuration
 └── requirements.txt    # Project dependencies
 ```
@@ -44,6 +46,7 @@ The `rl_lib` package is a modular reinforcement learning library that provides c
 - **Function Approximation Module**: Neural network function approximation with Adam optimization
 - **Utils Module**: Utility functions for iteration, convergence, and accumulation
 - **ADP Module**: Approximate Dynamic Programming algorithms including backward induction
+- **Logging Module**: JSON-formatted logging with automatic timestamped log files
 
 Features:
 - Modular design with clear separation of concerns
@@ -79,6 +82,12 @@ Usage:
 ```bash
 # Run the implementation using rl_lib
 python chapters/7/asset_alloc.py
+
+# Enable debug logging with info level
+python chapters/7/asset_alloc.py --debug --log-level info
+
+# Use a custom log file name
+python chapters/7/asset_alloc.py --debug --log-file my_custom_log.json
 ```
 
 The output shows:
@@ -86,6 +95,22 @@ The output shows:
 2. Optimal risky asset allocation and value
 3. Optimal weights for the function approximation
 4. Analytical solution for comparison
+
+#### Logging Features
+
+The asset allocation model includes comprehensive JSON-formatted logging:
+
+- Logs are stored in the `logs/` directory with timestamped filenames
+- Debug mode can be enabled with the `--debug` flag
+- Log levels can be set with `--log-level` (debug, info, warning, error)
+- Custom log file names can be specified with `--log-file`
+- Logs include:
+  - Model configuration parameters
+  - Backward induction progress
+  - Weight summaries at each time step
+  - Optimal allocations and values
+  - Analytical solution details
+  - Comparison between numerical and analytical results
 
 ### Portfolio Optimization (appendix-b/)
 

@@ -5,14 +5,16 @@ This module provides functions for solving Markov Decision Processes
 using backward induction with function approximation.
 """
 
-from typing import TypeVar, Tuple, Sequence, Iterator, Callable
+from typing import TypeVar, Tuple, Sequence, Iterator, Callable, Dict, Any
 from operator import itemgetter
+import numpy as np
 
 from rl_lib.distribution.base import Distribution
 from rl_lib.mdp.state import State, NonTerminal
 from rl_lib.mdp.process import MarkovDecisionProcess
 from rl_lib.mdp.policy import Policy, DeterministicPolicy
 from rl_lib.function_approx.base import FunctionApprox
+from rl_lib.logging import get_logger, log_phase, log_convergence, log_weights_summary
 
 # Type variables
 S = TypeVar('S')  # State type
@@ -75,11 +77,32 @@ def back_opt_vf_and_policy(
     Returns:
         Iterator of (value function, policy) pairs for each time step
     """
+    # Get logger
+    logger = get_logger()
+    
+    # Log the start of backward induction
+    log_phase("back_opt_vf_and_policy_start", {
+        "horizon": len(mdp_f0_mu_triples),
+        "discount_factor": γ,
+        "num_state_samples": num_state_samples,
+        "error_tolerance": error_tolerance
+    })
+    
+    # Get the number of time steps
+    horizon = len(mdp_f0_mu_triples)
+    
     # Initialize list to store value functions and policies
     vp = []
     
     # Process time steps in reverse order
     for i, (mdp, approx0, mu) in enumerate(reversed(mdp_f0_mu_triples)):
+        # Log the start of processing for this time step
+        logger.info({
+            "event": "processing_time_step_vf",
+            "time_step": horizon - i - 1,  # Convert to forward time index
+            "reverse_index": i
+        })
+        
         # Define return function for this time step
         def return_(s_r: Tuple[State[S], float], i=i) -> float:
             """Compute return for a (state, reward) pair."""
@@ -89,6 +112,18 @@ def back_opt_vf_and_policy(
         
         # Sample states from the distribution
         sampled_states = mu.sample_n(num_state_samples)
+        
+        # Log state sampling
+        logger.debug({
+            "event": "sampled_states_vf",
+            "time_step": horizon - i - 1,
+            "num_states": len(sampled_states),
+            "sample_stats": {
+                "min": float(min(s.state for s in sampled_states)) if sampled_states else None,
+                "max": float(max(s.state for s in sampled_states)) if sampled_states else None,
+                "mean": float(sum(s.state for s in sampled_states) / len(sampled_states)) if sampled_states else None
+            }
+        })
         
         # For each sampled state, compute the optimal value
         training_data = []
@@ -103,8 +138,26 @@ def back_opt_vf_and_policy(
             # Add (state, optimal value) pair to training data
             training_data.append((s, max_val))
         
+        # Log training data statistics
+        if training_data:
+            v_vals = [v for _, v in training_data]
+            logger.debug({
+                "event": "training_data_stats_vf",
+                "time_step": horizon - i - 1,
+                "num_samples": len(training_data),
+                "value_stats": {
+                    "min": float(min(v_vals)),
+                    "max": float(max(v_vals)),
+                    "mean": float(sum(v_vals) / len(v_vals)),
+                    "std": float(np.std(v_vals)) if len(v_vals) > 1 else 0.0
+                }
+            })
+        
         # Solve for the value function approximation
         this_v = approx0.solve(training_data, error_tolerance)
+        
+        # Log weights summary
+        log_weights_summary(this_v.weights, f"vf_weights_time_{horizon - i - 1}")
         
         # Define the deterministic policy
         def deter_policy(state: S) -> A:
@@ -123,8 +176,25 @@ def back_opt_vf_and_policy(
             
             return best_action
         
+        # Create policy
+        policy = DeterministicPolicy(deter_policy)
+        
         # Add value function and policy to the list
-        vp.append((this_v, DeterministicPolicy(deter_policy)))
+        vp.append((this_v, policy))
+        
+        # Log completion of this time step
+        logger.info({
+            "event": "time_step_completed_vf",
+            "time_step": horizon - i - 1,
+            "reverse_index": i,
+            "remaining_steps": i
+        })
+    
+    # Log completion of backward induction
+    log_phase("back_opt_vf_and_policy_complete", {
+        "horizon": horizon,
+        "num_value_functions": len(vp)
+    })
     
     # Return value functions and policies in forward order
     return reversed(vp)
@@ -151,6 +221,17 @@ def back_opt_qvf(
     Returns:
         Iterator of Q-value functions for each time step
     """
+    # Get logger
+    logger = get_logger()
+    
+    # Log the start of backward induction
+    log_phase("back_opt_qvf_start", {
+        "horizon": len(mdp_f0_mu_triples),
+        "discount_factor": γ,
+        "num_state_samples": num_state_samples,
+        "error_tolerance": error_tolerance
+    })
+    
     # Get the number of time steps
     horizon = len(mdp_f0_mu_triples)
     
@@ -159,6 +240,13 @@ def back_opt_qvf(
     
     # Process time steps in reverse order
     for i, (mdp, approx0, mu) in enumerate(reversed(mdp_f0_mu_triples)):
+        # Log the start of processing for this time step
+        logger.info({
+            "event": "processing_time_step",
+            "time_step": horizon - i - 1,  # Convert to forward time index
+            "reverse_index": i
+        })
+        
         # Define return function for this time step
         def return_(s_r: Tuple[State[S], float], i=i) -> float:
             """Compute return for a (state, reward) pair."""
@@ -180,6 +268,18 @@ def back_opt_qvf(
         # Sample states from the distribution
         sampled_states = mu.sample_n(num_state_samples)
         
+        # Log state sampling
+        logger.debug({
+            "event": "sampled_states",
+            "time_step": horizon - i - 1,
+            "num_states": len(sampled_states),
+            "sample_stats": {
+                "min": float(min(s.state for s in sampled_states)) if sampled_states else None,
+                "max": float(max(s.state for s in sampled_states)) if sampled_states else None,
+                "mean": float(sum(s.state for s in sampled_states) / len(sampled_states)) if sampled_states else None
+            }
+        })
+        
         # For each sampled state and action, compute the Q-value
         training_data = []
         for s in sampled_states:
@@ -188,11 +288,43 @@ def back_opt_qvf(
                 q_val = mdp.step(s, a).expectation(return_)
                 training_data.append(((s, a), q_val))
         
+        # Log training data statistics
+        if training_data:
+            q_vals = [q for _, q in training_data]
+            logger.debug({
+                "event": "training_data_stats",
+                "time_step": horizon - i - 1,
+                "num_samples": len(training_data),
+                "q_value_stats": {
+                    "min": float(min(q_vals)),
+                    "max": float(max(q_vals)),
+                    "mean": float(sum(q_vals) / len(q_vals)),
+                    "std": float(np.std(q_vals)) if len(q_vals) > 1 else 0.0
+                }
+            })
+        
         # Solve for the Q-value function approximation
         this_qvf = approx0.solve(training_data, error_tolerance)
         
+        # Log weights summary
+        log_weights_summary(this_qvf.weights, f"qvf_weights_time_{horizon - i - 1}")
+        
         # Add Q-value function to the list
         qvf.append(this_qvf)
+        
+        # Log completion of this time step
+        logger.info({
+            "event": "time_step_completed",
+            "time_step": horizon - i - 1,
+            "reverse_index": i,
+            "remaining_steps": i
+        })
+    
+    # Log completion of backward induction
+    log_phase("back_opt_qvf_complete", {
+        "horizon": horizon,
+        "num_q_functions": len(qvf)
+    })
     
     # Return Q-value functions in forward order
     return reversed(qvf)

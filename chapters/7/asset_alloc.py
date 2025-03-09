@@ -6,13 +6,15 @@ from the rl_lib package instead of containing all the code.
 """
 
 import numpy as np
+import argparse
 from dataclasses import dataclass
-from typing import Callable, Sequence, Tuple, Iterator
+from typing import Callable, Sequence, Tuple, Iterator, Dict, Any
 
 from rl_lib.distribution import Gaussian, Choose, Constant
 from rl_lib.mdp import State, Terminal, NonTerminal, MarkovDecisionProcess, DeterministicPolicy
 from rl_lib.function_approx import DNNSpec, DNNApprox, AdamGradient
 from rl_lib.adp import back_opt_vf_and_policy, back_opt_qvf
+from rl_lib.logging import setup_logger, get_logger, log_phase, log_weights_summary, log_convergence, log_iteration
 
 @dataclass(frozen=True)
 class AssetAllocDiscrete:
@@ -234,17 +236,73 @@ class AssetAllocDiscrete:
         )
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description='Asset Allocation Discrete Model')
+    
+    # Model parameters
+    parser.add_argument('--steps', type=int, default=4,
+                        help='Number of time steps')
+    parser.add_argument('--mu', type=float, default=0.13,
+                        help='Mean return of risky asset')
+    parser.add_argument('--sigma', type=float, default=0.2,
+                        help='Standard deviation of risky asset return')
+    parser.add_argument('--r', type=float, default=0.07,
+                        help='Risk-free rate')
+    parser.add_argument('--a', type=float, default=1.0,
+                        help='Risk aversion parameter')
+    parser.add_argument('--init-wealth', type=float, default=1.0,
+                        help='Initial wealth')
+    parser.add_argument('--init-wealth-stdev', type=float, default=0.1,
+                        help='Standard deviation of initial wealth')
+    
+    # Logging parameters
+    parser.add_argument('--debug', action='store_true',
+                        help='Enable debug logging')
+    parser.add_argument('--log-level', type=str, default='info',
+                        choices=['debug', 'info', 'warning', 'error'],
+                        help='Logging level')
+    parser.add_argument('--log-file', type=str, default=None,
+                        help='Custom log file path')
+    
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
     from pprint import pprint
     
+    # Parse command-line arguments
+    args = parse_args()
+    
+    # Set up logger
+    logger = setup_logger(
+        debug=args.debug,
+        log_level=args.log_level,
+        log_file=args.log_file
+    )
+    
+    # Log initial configuration
+    logger.info({
+        "event": "model_configuration",
+        "parameters": {
+            "steps": args.steps,
+            "mu": args.mu,
+            "sigma": args.sigma,
+            "r": args.r,
+            "a": args.a,
+            "init_wealth": args.init_wealth,
+            "init_wealth_stdev": args.init_wealth_stdev
+        }
+    })
+    
     # Model parameters
-    steps = 4
-    μ = 0.13  # Mean return of risky asset
-    σ = 0.2   # Standard deviation of risky asset return
-    r = 0.07  # Risk-free rate
-    a = 1.0   # Risk aversion parameter
-    init_wealth = 1.0
-    init_wealth_stdev = 0.1
+    steps = args.steps
+    μ = args.mu
+    σ = args.sigma
+    r = args.r
+    a = args.a
+    init_wealth = args.init_wealth
+    init_wealth_stdev = args.init_wealth_stdev
     
     # Calculate base allocation using analytical formula
     excess = μ - r
@@ -314,31 +372,62 @@ if __name__ == '__main__':
     #     print()
     
     # Run Q-value function backward induction
+    log_phase("backward_induction_qvf", {
+        "num_state_samples": 300,
+        "error_tolerance": 1e-6,
+        "discount_factor": 1.0
+    })
+    
     it_qvf = aad.backward_induction_qvf()
     
     print("Backward Induction on Q-Value Function")
     print("--------------------------------------")
     print()
+    
+    results = []
     for t, q in enumerate(it_qvf):
+        # Log weights summary
+        log_weights_summary(q.weights, f"qvf_weights_time_{t}")
+        
         print(f"Time {t:d}")
         print()
+        
         # Find optimal allocation and value
         opt_alloc = max(
             ((q((NonTerminal(init_wealth), ac)), ac) for ac in alloc_choices),
             key=lambda x: x[0]
         )[1]
         val = max(q((NonTerminal(init_wealth), ac)) for ac in alloc_choices)
+        
+        # Log results
+        logger.info({
+            "event": "optimal_allocation",
+            "time_step": t,
+            "optimal_allocation": float(opt_alloc),
+            "optimal_value": float(val)
+        })
+        
+        # Store results for final summary
+        results.append({
+            "time_step": t,
+            "optimal_allocation": float(opt_alloc),
+            "optimal_value": float(val)
+        })
+        
         print(f"Opt Risky Allocation = {opt_alloc:.3f}, Opt Val = {val:.3f}")
         print("Optimal Weights below:")
         for wts in q.weights:
             pprint(wts.weights)
         print()
     
+    log_phase("analytical_solution")
+    
     print("Analytical Solution")
     print("-------------------")
     print()
     
     # Calculate and print analytical solution for each time step
+    analytical_results = []
     for t in range(steps):
         print(f"Time {t:d}")
         print()
@@ -353,9 +442,58 @@ if __name__ == '__main__':
         x_t_wt = a * excess * growth
         x_t2_wt = -var * (a * growth) ** 2 / 2
         
+        # Log analytical results
+        logger.info({
+            "event": "analytical_solution",
+            "time_step": t,
+            "optimal_allocation": float(alloc),
+            "optimal_value": float(vval),
+            "weights": {
+                "bias": float(bias_wt),
+                "wealth": float(w_t_wt),
+                "allocation": float(x_t_wt),
+                "allocation_squared": float(x_t2_wt)
+            }
+        })
+        
+        # Store for comparison
+        analytical_results.append({
+            "time_step": t,
+            "optimal_allocation": float(alloc),
+            "optimal_value": float(vval)
+        })
+        
         print(f"Opt Risky Allocation = {alloc:.3f}, Opt Val = {vval:.3f}")
         print(f"Bias Weight = {bias_wt:.3f}")
         print(f"W_t Weight = {w_t_wt:.3f}")
         print(f"x_t Weight = {x_t_wt:.3f}")
         print(f"x_t^2 Weight = {x_t2_wt:.3f}")
         print()
+    
+    # Log comparison between numerical and analytical results
+    comparisons = []
+    for t in range(steps):
+        numerical = results[t]
+        analytical = analytical_results[t]
+        
+        # Calculate differences
+        alloc_diff = numerical["optimal_allocation"] - analytical["optimal_allocation"]
+        val_diff = numerical["optimal_value"] - analytical["optimal_value"]
+        
+        comparisons.append({
+            "time_step": t,
+            "numerical_allocation": numerical["optimal_allocation"],
+            "analytical_allocation": analytical["optimal_allocation"],
+            "allocation_difference": float(alloc_diff),
+            "allocation_difference_pct": float(alloc_diff / analytical["optimal_allocation"] * 100),
+            "numerical_value": numerical["optimal_value"],
+            "analytical_value": analytical["optimal_value"],
+            "value_difference": float(val_diff),
+            "value_difference_pct": float(val_diff / analytical["optimal_value"] * 100) if analytical["optimal_value"] != 0 else 0
+        })
+    
+    # Log final summary
+    logger.info({
+        "event": "results_comparison",
+        "comparisons": comparisons
+    })

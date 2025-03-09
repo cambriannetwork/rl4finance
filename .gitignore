@@ -15,6 +15,7 @@ RL-book/
 *.csv
 *.png
 data/
+logs/
 
 # IDE
 .vscode/
