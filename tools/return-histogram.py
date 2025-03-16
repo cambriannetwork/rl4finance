@@ -7,7 +7,31 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from datetime import datetime
+
+# Set up Tufte-inspired style
+plt.rcParams.update({
+    'font.family': 'serif',
+    'font.serif': ['Palatino', 'Times New Roman', 'Times', 'serif'],
+    'font.size': 10,
+    'axes.titlesize': 12,
+    'axes.labelsize': 11,
+    'xtick.labelsize': 9,
+    'ytick.labelsize': 9,
+    'legend.fontsize': 9,
+    'figure.titlesize': 14,
+    'figure.dpi': 150,
+    'savefig.dpi': 150,
+    'axes.spines.top': False,
+    'axes.spines.right': False,
+    'axes.grid': False,
+    'axes.axisbelow': True,
+    'axes.linewidth': 0.8,
+    'grid.linestyle': ':',
+    'grid.linewidth': 0.5,
+    'grid.alpha': 0.3
+})
 
 from common.data import get_latest_price_file, load_price_data, calculate_returns
 
@@ -30,8 +54,9 @@ def plot_return_histograms(returns, period='daily', return_type='arithmetic', sa
         n_rows = int(np.ceil(np.sqrt(n_tokens)))
         n_cols = int(np.ceil(n_tokens / n_rows))
     
-    # Create a figure with subplots in a grid (without shared x-axis to allow individual ranges)
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
+    # Create a figure with subplots in a grid with a reasonable initial size
+    # that allows user resizing - adjusted for better text spacing
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 11), facecolor='#f9f9f9')
     
     # If only one row or column, axes won't be a 2D array
     if n_tokens == 1:
@@ -85,8 +110,9 @@ def plot_return_histograms(returns, period='daily', return_type='arithmetic', sa
             n_neg_bins = int(np.ceil(abs(x_min) / bin_width))
             # Create bin edges from x_min to 0 with consistent width
             neg_bins = np.linspace(x_min, 0, n_neg_bins + 1)
-            axes_flat[i].hist(negative_returns, bins=neg_bins, alpha=0.75, color='red', 
-                             edgecolor='black', label='Negative Returns')
+            # Use more muted red color with thinner edges for negative returns - no label
+            axes_flat[i].hist(negative_returns, bins=neg_bins, alpha=0.7, color='#d66563', 
+                             edgecolor='#555555', linewidth=0.5)
         
         # For positive returns: from 0 to max_val
         if not positive_returns.empty:
@@ -94,38 +120,53 @@ def plot_return_histograms(returns, period='daily', return_type='arithmetic', sa
             n_pos_bins = int(np.ceil(x_max / bin_width))
             # Create bin edges from 0 to x_max with consistent width
             pos_bins = np.linspace(0, x_max, n_pos_bins + 1)
-            axes_flat[i].hist(positive_returns, bins=pos_bins, alpha=0.75, color='green', 
-                             edgecolor='black', label='Positive Returns')
+            # Use more muted green color with thinner edges for positive returns - no label
+            axes_flat[i].hist(positive_returns, bins=pos_bins, alpha=0.7, color='#6cad68', 
+                             edgecolor='#555555', linewidth=0.5)
         
         # Handle zero returns separately (assign to positive for visual consistency)
         if not zero_returns.empty:
             # Plot zeros as a single green bar at exactly zero
             zero_bin = np.array([-1e-10, 1e-10])  # Tiny bin around zero
-            axes_flat[i].hist(zero_returns, bins=zero_bin, alpha=0.75, color='green',
-                             edgecolor='black')
+            # Use same muted green for zero returns with thinner edges
+            axes_flat[i].hist(zero_returns, bins=zero_bin, alpha=0.7, color='#6cad68',
+                             edgecolor='#555555', linewidth=0.5)
         
         # No vertical lines for mean and median - values are shown in the stats box only
         
-        # Add statistics to the plot
-        stats_text = (f"Mean: {mean_return:.4f}\n"
-                     f"Median: {median_return:.4f}\n"
-                     f"Std Dev: {std_dev:.4f}\n"
-                     f"Skewness: {skewness:.4f}\n"
-                     f"Kurtosis: {kurtosis:.4f}")
+        # Add statistics directly to the plot in a more elegant way
+        # Use direct labeling with minimal boxing for better data-ink ratio
+        stats_text = (f"μ: {mean_return:.4f}   σ: {std_dev:.4f}\n"
+                     f"median: {median_return:.4f}\n"
+                     f"skew: {skewness:.2f}   kurt: {kurtosis:.2f}")
         
-        axes_flat[i].text(0.02, 0.95, stats_text, transform=axes_flat[i].transAxes,
-                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        # Move stats box to upper right corner
+        axes_flat[i].text(0.97, 0.95, stats_text, transform=axes_flat[i].transAxes,
+                    verticalalignment='top', horizontalalignment='right', fontsize=9, 
+                    bbox=dict(boxstyle='round', facecolor='#f9f9f9', 
+                             edgecolor='#cccccc', alpha=0.9, pad=0.5))
         
-        # Set title and labels
-        axes_flat[i].set_title(f'{token} {period.capitalize()} {return_type} Returns', fontsize=14)
-        axes_flat[i].set_ylabel('Frequency', fontsize=12)
-        axes_flat[i].set_xlabel('Return', fontsize=12)  # Add x-label to all plots
+        # Simplified title to take less space
+        axes_flat[i].set_title(f'{token} Returns', fontsize=10)
+        axes_flat[i].set_ylabel('Frequency', fontsize=10)
+        axes_flat[i].set_xlabel('Return', fontsize=10)
         
         # Set x-axis limits to focus on the actual data range
         axes_flat[i].set_xlim(x_min, x_max)
         
-        axes_flat[i].grid(True, alpha=0.3)
-        axes_flat[i].legend(loc='upper right', fontsize=9)
+        # Add subtle grid lines only on y-axis for reference without distraction
+        axes_flat[i].grid(axis='y', linestyle=':', linewidth=0.5, alpha=0.3)
+        
+        # Add a subtle zero line for reference
+        axes_flat[i].axvline(x=0, color='#888888', linestyle='-', linewidth=0.8, alpha=0.5)
+        
+        # Remove legend as requested - color coding is sufficient
+        
+        # Remove top and right spines for cleaner look
+        axes_flat[i].spines['top'].set_visible(False)
+        axes_flat[i].spines['right'].set_visible(False)
+        axes_flat[i].spines['left'].set_linewidth(0.8)
+        axes_flat[i].spines['bottom'].set_linewidth(0.8)
     
     # Hide unused subplots
     for j in range(i + 1, len(axes_flat)):
@@ -141,21 +182,20 @@ def plot_return_histograms(returns, period='daily', return_type='arithmetic', sa
     if not isinstance(end_date, pd.Timestamp):
         end_date = pd.to_datetime(end_date, unit='ms')
     
-    # Add overall title - positioned higher to avoid overlap
-    fig.suptitle(f'Return Distributions\n{start_date:%Y-%m-%d} to {end_date:%Y-%m-%d}', 
-                fontsize=16, y=0.95)
+    # Even more spacing between subplots to avoid text overlap
+    plt.subplots_adjust(top=0.82, hspace=0.6, wspace=0.5)
     
-    # Adjust layout with more space for title
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.88, hspace=0.4, wspace=0.2)
+    # Add overall title with date range - moved higher to avoid overlap
+    fig.suptitle(f'Return Distributions\n{start_date:%B %d, %Y} to {end_date:%B %d, %Y}', 
+                fontsize=13, y=0.90)
     
-    # Save plot if requested
+    # Save plot with optimized settings for online presentation
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='#f9f9f9')
         print(f"Plot saved to {save_path}")
     
-    # Show plot
-    plt.show()
+    # Show plot and block until window is closed
+    plt.show(block=True)
 
 def parse_args():
     """Parse command line arguments."""
