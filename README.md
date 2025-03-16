@@ -26,7 +26,8 @@ RL4Finance/
 │   └── return_and_risk.py  # Return and risk analysis
 ├── tools/              # Utility scripts
 │   ├── get_prices.py   # Crypto price data fetcher
-│   └── visualize.py    # Price visualization tool
+│   ├── visualize.py    # Price visualization tool
+│   └── return-histogram.py # Return distribution visualization
 ├── common/             # Shared functionality
 │   └── data.py         # Data loading and processing functions
 ├── data/               # Price data storage (created by setup)
@@ -247,16 +248,58 @@ python tools/visualize.py --file data/prices_2025-03-14.csv
 python tools/visualize.py --save prices_chart.png
 ```
 
+#### Return Distribution Analysis (return-histogram.py)
+
+The `return-histogram.py` script visualizes the distribution of cryptocurrency returns:
+
+- Creates histograms of returns for all tokens in a grid layout
+- Color-codes returns (red for negative, green for positive)
+- Displays detailed statistics for each token:
+  - Mean
+  - Median
+  - Standard deviation
+  - Skewness
+  - Kurtosis
+- Supports different return periods and types
+- Optimizes bin sizes for consistent visualization
+- Automatically focuses on the actual data range
+
+Features:
+- Grid layout for easy comparison between tokens
+- Color-coded histograms for intuitive interpretation
+- Statistical summary for quantitative analysis
+- Consistent bin widths for accurate visual comparison
+- Customizable options for different analysis needs
+
+Usage:
+```bash
+# Basic usage (daily arithmetic returns)
+python tools/return-histogram.py
+
+# Weekly returns
+python tools/return-histogram.py --period weekly
+
+# Log returns
+python tools/return-histogram.py --return-type log
+
+# Save the plot to a file
+python tools/return-histogram.py --save returns_histogram.png
+```
+
 ## Usage
 
 ### Visualization
 
 ```bash
-# Visualize the latest price data
+# Visualize price data
 python tools/visualize.py
 
-# Save visualization to a specific file
+# Visualize return distributions
+python tools/return-histogram.py
+
+# Save visualizations to files
 python tools/visualize.py --save my_price_chart.png
+python tools/return-histogram.py --save my_returns_histogram.png
 ```
 
 ### Portfolio Optimization
