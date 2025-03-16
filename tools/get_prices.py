@@ -43,9 +43,6 @@ examples:
 
   # Get 5-minute data for the last day
   python get_prices.py --tokens ETH WBTC SOL --interval 5m --days 1
-
-  # Get weekly data
-  python get_prices.py --tokens ETH WBTC --period weekly
 """
 
 class CoinGeckoAPI:
@@ -100,7 +97,10 @@ class CoinGeckoAPI:
             'eth': 'ethereum',
             'wbtc': 'wrapped-bitcoin',
             'sol': 'solana',
-            'grt': 'the-graph'
+            'grt': 'the-graph',
+            'ada': 'cardano',
+            'btc': 'bitcoin',
+            'bnb': 'binancecoin'
         }
         
         if symbol in KNOWN_MAPPINGS:
@@ -137,12 +137,23 @@ class CoinGeckoAPI:
         }
         
         data = self._make_request(url, params=params)
+        
+        # Log information about the API response
+        if "prices" in data:
+            price_count = len(data["prices"])
+            first_timestamp = data["prices"][0][0] if price_count > 0 else None
+            last_timestamp = data["prices"][-1][0] if price_count > 0 else None
+            logger.info(f"Retrieved {price_count} price points for {coin_id}")
+            logger.info(f"Timestamp range: {first_timestamp} to {last_timestamp}")
+        else:
+            logger.warning(f"No price data found in API response for {coin_id}")
+            
         return data["prices"]  # List of [timestamp, price]
 
 def format_data(prices: List, symbol: str) -> pd.DataFrame:
     """Convert raw API response into a DataFrame with token column."""
     df = pd.DataFrame(prices, columns=["timestamp", "price"])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    # Keep timestamps as milliseconds, don't convert to datetime
     df["token"] = symbol
     return df[["timestamp", "token", "price"]]
 
@@ -178,69 +189,28 @@ def get_prices(
     result = pd.concat(all_data, ignore_index=True)
     return result.sort_values(['token', 'timestamp'])
 
-def resample_prices(df: pd.DataFrame, period: str = 'daily') -> pd.DataFrame:
-    """Resample price data to desired period.
+def print_data_quality_report(df: pd.DataFrame) -> None:
+    """Print a simple report on data quality without modifying the data.
     
     Args:
         df: DataFrame with timestamp, token, price columns
-        period: 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'
-        
-    Returns:
-        DataFrame: Resampled price data
     """
-    # Print data coverage and quality info
     logger.info("\nData Quality Report:")
     
-    # Print date ranges per asset
-    logger.info("\nDate ranges per asset:")
+    # Print timestamp ranges per asset (in milliseconds)
+    logger.info("\nTimestamp ranges per asset:")
     for token in df['token'].unique():
         token_data = df[df['token'] == token]
-        logger.info(f"{token}: {token_data['timestamp'].min():%Y-%m-%d} to {token_data['timestamp'].max():%Y-%m-%d}")
+        logger.info(f"{token}: {token_data['timestamp'].min()} to {token_data['timestamp'].max()}")
     
     # Check data points per asset
     counts = df.groupby('token').size()
-    if counts.nunique() > 1:
-        logger.info("\nData points per asset:")
-        for token, count in counts.items():
-            logger.info(f"{token}: {count} points")
+    logger.info("\nData points per asset:")
+    for token, count in counts.items():
+        logger.info(f"{token}: {count} points")
     
-    # Resample data
-    period_map = {
-        'daily': 'D',
-        'weekly': 'W',
-        'monthly': 'ME',  # Month End frequency
-        'quarterly': 'QE',  # Quarter End frequency
-        'yearly': 'YE'  # Year End frequency
-    }
-    freq = period_map.get(period, 'D')
-    
-    # Pivot and resample
-    pivot_df = df.pivot(index='timestamp', columns='token', values='price')
-    original_periods = len(pivot_df)
-    logger.info(f"\nOriginal number of periods: {original_periods}")
-    
-    # Drop any rows with missing data
-    pivot_df = pivot_df.dropna()
-    dropped_periods = original_periods - len(pivot_df)
-    if dropped_periods > 0:
-        logger.warning(f"\nDropped {dropped_periods} periods due to missing data")
-    
-    # Resample the aligned data
-    resampled = pivot_df.resample(freq).last()
-    
-    # Drop any new missing data after resampling
-    resampled = resampled.dropna()
-    
-    # Melt back to long format
-    result = resampled.reset_index().melt(
-        id_vars=['timestamp'],
-        var_name='token',
-        value_name='price'
-    )
-    
-    logger.info(f"\nFinal number of aligned periods: {len(resampled)}")
-    
-    return result.sort_values(['token', 'timestamp'])
+    # Count total data points
+    logger.info(f"\nTotal data points: {len(df)}")
 
 def save_data(df: pd.DataFrame) -> None:
     """Save data to CSV file in the data directory."""
@@ -275,10 +245,6 @@ def main():
                       help=f'Data interval (default: {DEFAULT_INTERVAL})')
     parser.add_argument('--currency', default=DEFAULT_CURRENCY,
                       help=f'Price currency (default: {DEFAULT_CURRENCY})')
-    parser.add_argument('--period',
-                      choices=['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
-                      default='daily',
-                      help='Resample period (default: daily)')
     
     args = parser.parse_args()
     
@@ -286,44 +252,8 @@ def main():
         symbols = [s.upper() for s in (args.tokens or DEFAULT_TOKENS)]
         df = get_prices(symbols, args.currency, args.days, args.interval)
         
-        # Always show data quality info and resample if needed
-        if args.period == 'daily':
-            # Just show data quality info without resampling
-            logger.info("\nData Quality Report:")
-            logger.info("\nDate ranges per asset:")
-            for token in df['token'].unique():
-                token_data = df[df['token'] == token]
-                logger.info(f"{token}: {token_data['timestamp'].min():%Y-%m-%d} to {token_data['timestamp'].max():%Y-%m-%d}")
-            
-            # Check data points per asset
-            counts = df.groupby('token').size()
-            if counts.nunique() > 1:
-                logger.info("\nData points per asset:")
-                for token, count in counts.items():
-                    logger.info(f"{token}: {count} points")
-            
-            # Drop any timestamps where we don't have all prices
-            pivot_df = df.pivot(index='timestamp', columns='token', values='price')
-            original_periods = len(pivot_df)
-            logger.info(f"\nOriginal number of periods: {original_periods}")
-            
-            pivot_df = pivot_df.dropna()
-            dropped_periods = original_periods - len(pivot_df)
-            if dropped_periods > 0:
-                logger.warning(f"\nDropped {dropped_periods} periods due to missing data")
-            
-            # Convert back to long format
-            df = pivot_df.reset_index().melt(
-                id_vars=['timestamp'],
-                var_name='token',
-                value_name='price'
-            )
-            
-            logger.info(f"\nFinal number of aligned periods: {len(pivot_df)}")
-        else:
-            # Resample and show data quality info
-            print(f"\nResampling to {args.period} frequency...")
-            df = resample_prices(df, args.period)
+        # Print data quality report without modifying the data
+        print_data_quality_report(df)
         
         logger.info("\nLast 5 entries of price data:")
         print(df.tail())

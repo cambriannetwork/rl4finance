@@ -33,37 +33,37 @@ def get_latest_price_file(project_root=None):
     return sorted(files, key=os.path.getctime, reverse=True)[0]  # Sort by file creation time
 
 def load_price_data(file_path):
-    """Load and preprocess price data from CSV.
+    """Load price data from CSV, keeping timestamps as milliseconds.
     
     Args:
         file_path (str): Path to the price data CSV file
         
     Returns:
-        pd.DataFrame: Price data with datetime index and token columns
+        pd.DataFrame: Price data with millisecond timestamp index and token columns
     """
     df = pd.read_csv(file_path)
     
-    # Convert timestamp to datetime
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    
     # Pivot the data to get prices for each token in columns
+    # No timestamp conversion - keep as milliseconds
     pivot_df = df.pivot(index='timestamp', columns='token', values='price')
     
     return pivot_df
 
-def calculate_returns(prices, return_type='arithmetic', period='daily'):
-    """Calculate returns from price data.
+def resample_prices(prices, period):
+    """Resample price data to the specified period.
     
     Args:
-        prices (pd.DataFrame): Price data with datetime index and token columns
-        return_type (str): Type of return calculation ('arithmetic' or 'log')
-        period (str): Return calculation period ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')
+        prices (pd.DataFrame): Price data with millisecond timestamp index
+        period (str): Resampling period ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')
         
     Returns:
-        pd.DataFrame: Returns data
+        pd.DataFrame: Resampled price data with datetime index
     """
+    # Convert millisecond timestamps to datetime for resampling
+    prices_datetime = prices.copy()
+    prices_datetime.index = pd.to_datetime(prices_datetime.index, unit='ms')
     
-    # Resample data based on period
+    # Resample based on period
     period_map = {
         'daily': 'D',
         'weekly': 'W',
@@ -71,18 +71,41 @@ def calculate_returns(prices, return_type='arithmetic', period='daily'):
         'quarterly': 'QE',  # Quarter End frequency
         'yearly': 'YE'  # Year End frequency
     }
-    
-    # Get the pandas frequency string for the period
     freq = period_map[period]
     
     # Resample to the specified period, taking the last price of each period
-    prices = prices.resample(freq).last()
+    resampled = prices_datetime.resample(freq).last()
+    
+    return resampled
+
+def calculate_returns(prices, return_type='arithmetic', period=None):
+    """Calculate returns from price data.
+    
+    Args:
+        prices (pd.DataFrame): Price data with millisecond timestamp index or datetime index
+        return_type (str): Type of return calculation ('arithmetic' or 'log')
+        period (str, optional): Optional resampling period ('daily', 'weekly', etc.)
+                               If None, no resampling is performed
+        
+    Returns:
+        pd.DataFrame: Returns data
+    """
+    # Make a copy of the prices to avoid modifying the original
+    prices_copy = prices.copy()
+    
+    # Check if the index is already datetime, if not convert it
+    if not isinstance(prices_copy.index, pd.DatetimeIndex):
+        prices_copy.index = pd.to_datetime(prices_copy.index, unit='ms')
+    
+    # Optional resampling based on period
+    if period is not None:
+        prices_copy = resample_prices(prices_copy, period)
     
     # Calculate returns based on type
     if return_type == 'arithmetic':
-        returns = prices.pct_change()
+        returns = prices_copy.pct_change()
     else:  # log returns
-        returns = np.log(prices / prices.shift(1))
+        returns = np.log(prices_copy / prices_copy.shift(1))
     
     # Remove any rows with missing data
     returns = returns.dropna()

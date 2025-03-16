@@ -11,7 +11,7 @@ import argparse
 import numpy as np
 from datetime import datetime
 
-from common.data import get_latest_price_file, load_price_data, calculate_returns
+from common.data import get_latest_price_file, load_price_data, calculate_returns, resample_prices
 
 def create_portfolio_weights(tokens):
     """Create random portfolio weights that sum to 1.
@@ -95,17 +95,15 @@ def main():
     args = parse_args()
     
     # Get latest price data
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    tools_dir = os.path.join(script_dir, '..', 'tools')
-    price_file = get_latest_price_file(tools_dir)
+    price_file = get_latest_price_file()
     print(f"\nProcessing file: {os.path.abspath(price_file)}")
     print(f"File created: {datetime.fromtimestamp(os.path.getctime(price_file)).strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Load and process data
+    # Load price data (keeping timestamps as milliseconds)
     prices = load_price_data(price_file)
     print("\nAssets found:", ", ".join(prices.columns))
     
-    # Calculate returns
+    # Calculate returns with resampling if period is specified
     returns = calculate_returns(prices, return_type=args.return_type, period=args.period)
     print(f"\nCalculating {args.return_type} returns on {args.period} basis")
     print(f"Number of return periods: {len(returns)}")

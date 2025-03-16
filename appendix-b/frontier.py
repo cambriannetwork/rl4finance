@@ -9,7 +9,7 @@ import scipy.optimize as sco
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-from common.data import get_latest_price_file, load_price_data, calculate_returns
+from common.data import get_latest_price_file, load_price_data, calculate_returns, resample_prices
 
 def calculate_total_return(returns, weights):
     """Calculate total portfolio return over the full horizon for a buy-and-hold strategy.
@@ -215,9 +215,19 @@ def plot_portfolios(returns, random_results, gmvp_results, save=False, period='d
     plt.colorbar(scatter, label='Sharpe Ratio')
     
     # Create descriptive title
+    # Format dates for title - ensure they're datetime objects
+    start_date = returns.index[0]
+    end_date = returns.index[-1]
+    
+    # Convert to datetime if they're not already
+    if not isinstance(start_date, pd.Timestamp):
+        start_date = pd.to_datetime(start_date, unit='ms')
+    if not isinstance(end_date, pd.Timestamp):
+        end_date = pd.to_datetime(end_date, unit='ms')
+    
     plt.title('Portfolio Analysis\n' +  # Main title
              f'{", ".join(returns.columns)} | ' +  # Assets
-             f'{returns.index[0]:%Y-%m-%d} to {returns.index[-1]:%Y-%m-%d} | ' +  # Date range
+             f'{start_date:%Y-%m-%d} to {end_date:%Y-%m-%d} | ' +  # Date range
              f'{period.capitalize()} {return_type} returns',  # Analysis parameters
              pad=15, fontsize=12)  # Match axis label font size
     
@@ -339,11 +349,11 @@ def main():
         print(f"\nProcessing file: {os.path.abspath(price_file)}")
         print(f"File created: {datetime.fromtimestamp(os.path.getctime(price_file)).strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # Load and process data
+        # Load price data (keeping timestamps as milliseconds)
         prices = load_price_data(price_file)
         print("\nAssets found:", ", ".join(prices.columns))
         
-        # Calculate returns
+        # Calculate returns with resampling if period is specified
         returns = calculate_returns(prices, return_type=args.return_type, period=args.period)
         print(f"\nCalculating {args.return_type} returns on {args.period} basis")
         print(f"Number of return periods: {len(returns)}")

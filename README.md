@@ -10,7 +10,8 @@ A Python project for reinforcement learning in finance, portfolio optimization, 
 RL4Finance/
 ├── chapters/           # Reinforcement learning models
 │   └── 7/              # Chapter 7 models
-│       └── asset_alloc.py  # Implementation using rl_lib
+│       ├── asset_alloc.py      # Implementation using rl_lib
+│       └── asset_alloc_toy.py  # Toy model with backward induction
 ├── rl_lib/             # Modular reinforcement learning library
 │   ├── distribution/   # Probability distributions
 │   ├── mdp/            # Markov Decision Processes
@@ -24,7 +25,8 @@ RL4Finance/
 │   ├── covariance.py   # Asset returns covariance/correlation analysis
 │   └── return_and_risk.py  # Return and risk analysis
 ├── tools/              # Utility scripts
-│   └── get_prices.py   # Crypto price data fetcher
+│   ├── get_prices.py   # Crypto price data fetcher
+│   └── visualize.py    # Price visualization tool
 ├── common/             # Shared functionality
 │   └── data.py         # Data loading and processing functions
 ├── data/               # Price data storage (created by setup)
@@ -63,7 +65,9 @@ pip install -e .
 
 ### Reinforcement Learning Models (chapters/)
 
-#### Asset Allocation Discrete Model (chapters/7/asset_alloc.py)
+#### Asset Allocation Models (chapters/7/)
+
+##### Main Implementation (asset_alloc.py)
 
 This implementation uses the modular `rl_lib` package to solve the asset allocation problem:
 
@@ -95,6 +99,27 @@ The output shows:
 2. Optimal risky asset allocation and value
 3. Optimal weights for the function approximation
 4. Analytical solution for comparison
+
+##### Toy Model Implementation (chapters/7/asset_alloc_toy.py)
+
+A simplified implementation of the asset allocation problem using backward induction:
+
+- Uses a grid-based approach for wealth representation
+- Implements Monte Carlo sampling for return distributions
+- Visualizes optimal policy vs. wealth for each time step
+- Demonstrates core concepts without the full rl_lib framework
+
+Features:
+- Simple, self-contained implementation for educational purposes
+- Discrete set of possible actions (risky-asset allocations)
+- CARA utility function with risk aversion parameter
+- Visualization of optimal policy across time steps
+
+Usage:
+```bash
+# Run the toy implementation
+python chapters/7/asset_alloc_toy.py
+```
 
 #### Logging Features
 
@@ -153,10 +178,13 @@ Analyzes relationships between asset returns:
   - Covariance matrix (raw co-movement)
   - Correlation matrix (normalized -1 to 1 scale)
 
-### Cryptocurrency Price Data (tools/)
+### Cryptocurrency Price Data and Visualization (tools/)
+
+#### Price Data Collection (get_prices.py)
 
 The `get_prices.py` script fetches historical cryptocurrency price data using the CoinGecko Pro API:
 - Default tokens: ETH and BTC
+- Support for additional tokens: WBTC, SOL, GRT, ADA, BNB
 - Customizable time intervals (5m, hourly, daily)
 - Flexible resampling periods (daily, weekly, monthly, quarterly, yearly)
 - Data quality reporting:
@@ -191,7 +219,45 @@ The `get_prices.py` script fetches historical cryptocurrency price data using th
      ```
 
 
+#### Price Visualization (visualize.py)
+
+The `visualize.py` script provides visualization tools for cryptocurrency price data:
+
+- Plots price data for all tokens in a single chart
+- Automatically converts millisecond timestamps to datetime for plotting
+- Displays min/max price information in the legend
+- Supports saving plots to file
+- Works with the latest price data by default
+
+Features:
+- Clean, informative visualization with proper date formatting
+- Automatic detection of date ranges from the data
+- Grid lines and formatted axes for better readability
+- Detailed information about the data being visualized
+
+Usage:
+```bash
+# Basic usage (uses latest price file)
+python tools/visualize.py
+
+# Use a specific price file
+python tools/visualize.py --file data/prices_2025-03-14.csv
+
+# Save the plot to a file
+python tools/visualize.py --save prices_chart.png
+```
+
 ## Usage
+
+### Visualization
+
+```bash
+# Visualize the latest price data
+python tools/visualize.py
+
+# Save visualization to a specific file
+python tools/visualize.py --save my_price_chart.png
+```
 
 ### Portfolio Optimization
 
